@@ -11,7 +11,7 @@
 	<groupId>com.al</groupId>
 	<artifactId>lightq</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>simple-queue-service</name>
+	<name>LoghtQ</name>
 	<description>LightQ is a lightweight, high-performance message queue service built with Spring Boot. It provides a RESTful API for pushing, popping, and viewing messages in different consumer groups.</description>
 	<properties>
 		<java.version>21</java.version>
