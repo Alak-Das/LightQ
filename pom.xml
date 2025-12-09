@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.al</groupId>
-	<artifactId>simple-queue-service</artifactId>
+	<artifactId>lightq</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>simple-queue-service</name>
-	<description>This project is a simple, lightweight message queue service built with Spring Boot. It provides a RESTful API for pushing, popping, and viewing messages in different consumer groups.</description>
+	<description>LightQ is a lightweight, high-performance message queue service built with Spring Boot. It provides a RESTful API for pushing, popping, and viewing messages in different consumer groups.</description>
 	<properties>
 		<java.version>21</java.version>
 	</properties>

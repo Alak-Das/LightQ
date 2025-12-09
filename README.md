@@ -1,4 +1,4 @@
-# Simple Queue Service
+# LightQ
 
 A lightweight, high-performance message queue service built with Spring Boot, providing RESTful APIs for asynchronous message processing with support for consumer groups, Redis caching, and MongoDB persistence.
 
@@ -27,7 +27,7 @@ A lightweight, high-performance message queue service built with Spring Boot, pr
 
 ## 1. Project Overview
 
-The Simple Queue Service is a production-ready Spring Boot application that implements a distributed message queue system. It enables asynchronous communication between producers and consumers through a RESTful API, with support for multiple isolated consumer groups.
+The LightQ is a production-ready Spring Boot application that implements a distributed message queue system. It enables asynchronous communication between producers and consumers through a RESTful API, with support for multiple isolated consumer groups.
 
 ### Use Cases
 
@@ -72,7 +72,7 @@ graph TB
         C[Consumer]
     end
     
-    subgraph "Simple Queue Service"
+    subgraph "LightQ"
         API[REST API Layer<br/>MessageController]
         SVC[Service Layer<br/>Push/Pop/View Services]
         CACHE[Cache Service<br/>Redis Abstraction]
@@ -152,7 +152,7 @@ Client → Controller → Service → MongoDB (Find & Update) → Response
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd simple-queue-service
+   cd lightq
    ```
 
 2. **Configure application properties**
@@ -176,7 +176,7 @@ Client → Controller → Service → MongoDB (Find & Update) → Response
    
    # MongoDB Configuration
    spring.data.mongodb.uri=mongodb://admin:password@localhost:27017
-   spring.data.mongodb.database=simple-queue-db
+   spring.data.mongodb.database=lightq-db
    persistence.duration.minutes=30
    
    # API Configuration
@@ -195,7 +195,7 @@ Client → Controller → Service → MongoDB (Find & Update) → Response
 
    Or run the JAR directly:
    ```bash
-   java -jar target/simple-queue-service-0.0.1-SNAPSHOT.jar
+   java -jar target/lightq-0.0.1-SNAPSHOT.jar
    ```
 
 ### Docker Deployment
@@ -210,18 +210,18 @@ The project includes a multi-stage Dockerfile and docker-compose configuration f
    This will start:
     - MongoDB with authentication
     - Redis cache server
-    - Simple Queue Service application
+    - LightQ application
 
 2. **Manual Docker Build**
    ```bash
    # Build the image
-   docker build -t simple-queue-service:latest .
+   docker build -t lightq:latest .
    
    # Run the container
    docker run -p 8080:8080 \
      -e MONGO_URI=mongodb://admin:password@mongodb:27017 \
      -e SPRING_DATA_REDIS_HOST=redis \
-     simple-queue-service:latest
+     lightq:latest
    ```
 
 ### Verify Installation
@@ -239,7 +239,7 @@ The application supports configuration via environment variables for containeriz
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MONGO_URI` | `mongodb://admin:password@localhost:27017` | MongoDB connection string |
-| `MONGO_DB` | `simple-queue-db` | MongoDB database name |
+| `MONGO_DB` | `lightq-db` | MongoDB database name |
 | `SPRING_DATA_REDIS_HOST` | `localhost` | Redis server host |
 | `SPRING_DATA_REDIS_PORT` | `6379` | Redis server port |
 | `SECURITY_USER_USERNAME` | `user` | User role username |
@@ -678,7 +678,7 @@ Build Steps:
 
 ```yaml
 MONGO_URI: mongodb://admin:password@localhost:27017
-MONGO_DB: simple-queue-db
+MONGO_DB: lightq-db
 SECURITY_USER_USERNAME: user
 SECURITY_USER_PASSWORD: password
 SECURITY_ADMIN_USERNAME: admin
@@ -696,7 +696,7 @@ docker run -d -p 6379:6379 --name test-redis redis
 
 # Run tests with CI environment variables
 MONGO_URI=mongodb://admin:password@localhost:27017 \
-MONGO_DB=simple-queue-db \
+MONGO_DB=lightq-db \
 mvn clean package
 ```
 
@@ -898,7 +898,7 @@ docker-compose logs mongodb
 - Check TTL settings: `persistence.duration.minutes` in application.properties
 - Verify MongoDB TTL indexes:
   ```javascript
-  use simple-queue-db
+  use lightq-db
   db.{consumerGroup}.getIndexes()
   ```
 - Check async executor isn't overloaded:
@@ -1101,7 +1101,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions or support:
 - 📧 Email: [alakdas.mail@gmail.com](mailto:alakdas.mail@gmail.com)
-- 🐛 Issues: [GitHub Issues](https://github.com/Alak-Das/simple-queue-service/issues)
+- 🐛 Issues: [GitHub Issues](https://github.com/Alak-Das/lightq/issues)
 - 📖 Documentation: [Swagger UI](http://localhost:8080/swagger-ui.html)
 
 ---
