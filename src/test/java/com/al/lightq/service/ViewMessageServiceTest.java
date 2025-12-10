@@ -54,16 +54,15 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_noConsumedFilter() {
-        // When consumed is null, only mongoTemplate is queried, not cacheService.
-        // So, we expect only messages from mongoTemplate.
-        // The original test expected 3, because it assumed cache would also be checked, which is not the case for null 'consumed'.
+        // When consumed is null, cache is consulted first, then DB tops up excluding cache IDs.
+        when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message2, message3));
 
         List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
 
-        assertEquals(2, result.size()); // Corrected expected size
+        assertEquals(2, result.size());
         assertTrue(result.containsAll(Arrays.asList(message2, message3)));
-        verify(cacheService, never()).viewMessages(consumerGroup); // cacheService should not be called
+        verify(cacheService, times(1)).viewMessages(consumerGroup);
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 
@@ -107,14 +106,14 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_emptyResult() {
-        // When consumed is null, cacheService.viewMessages is not called.
-        // Only mongoTemplate is queried, and if it returns empty, then the result is empty.
+        // When consumed is null, cache is checked first; if both cache and DB are empty, result is empty.
+        when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(new ArrayList<>());
 
         List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
 
         assertTrue(result.isEmpty());
-        verify(cacheService, never()).viewMessages(consumerGroup); // cacheService should not be called
+        verify(cacheService, times(1)).viewMessages(consumerGroup);
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 }

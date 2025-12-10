@@ -43,52 +43,66 @@ public class ViewMessageService {
      * @return A sorted list of unique messages.
      */
     public List<Message> view(String consumerGroup, int messageCount, String consumed) {
-        logger.debug("Received request to view messages for Consumer Group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
+        final int limit = Math.max(0, messageCount);
+        final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
+        final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf("yes".equalsIgnoreCase(consumed)) : null;
+        logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : "N/A");
 
-        List<Message> combinedMessages = new ArrayList<>();
-
-        Query query = new Query();
-
-        if (consumed != null) {
-            if (consumed.equalsIgnoreCase("yes")) {
-                query.addCriteria(Criteria.where(CONSUMED).is(true));
-                logger.debug("Filtering messages to include only consumed messages.");
-            } else {
-                // Get from Cache
-                List<Message> cachedMessages = cacheService.viewMessages(consumerGroup).stream().limit(messageCount).toList();
-                combinedMessages.addAll(cachedMessages);
-                logger.debug("Retrieved {} messages from cache for Consumer Group: {}", cachedMessages.size(), consumerGroup);
-
-                Set<String> cachedMessageIds = cachedMessages.stream()
-                        .map(Message::getId)
-                        .collect(Collectors.toSet());
-
-                if (!cachedMessageIds.isEmpty()) {
-                    if (cachedMessageIds.size() < messageCount) {
-                        query.addCriteria(Criteria.where(ID).nin(cachedMessageIds));
-                        logger.debug("Excluding {} cached messages from MongoDB query.", cachedMessageIds.size());
-                    } else {
-                        logger.debug("All requested messages found in cache. Skipping MongoDB query.");
-                        // Sort by createdAt to maintain consistent order
-                        combinedMessages.sort(Comparator.comparing(Message::getCreatedAt));
-                        logger.debug("Returning a combined list of {} unique messages for Consumer Group: {}", combinedMessages.size(), consumerGroup);
-                        return combinedMessages;
-                    }
-                }
-                query.addCriteria(Criteria.where(CONSUMED).is(false));
-                logger.debug("Filtering messages to include only unconsumed messages (after checking cache).");
-            }
+        // Fast-path: only consumed => DB only
+        if (Boolean.TRUE.equals(consumedFlag)) {
+            Query query = new Query()
+                    .addCriteria(Criteria.where(CONSUMED).is(true))
+                    .limit(limit);
+            List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
+            fromDb.sort(Comparator.comparing(Message::getCreatedAt));
+            logger.info("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
+            return fromDb;
         }
 
-        query.limit(Math.max(0, messageCount - combinedMessages.size()));
-        List<Message> mongoMessages = mongoTemplate.find(query, Message.class, consumerGroup);
-        combinedMessages.addAll(mongoMessages);
-        logger.debug("Retrieved {} messages from MongoDB for Consumer Group: {}.", mongoMessages.size(), consumerGroup);
+        // Cache-first for unconsumed or no filter
+        List<Message> cached = cacheService.viewMessages(consumerGroup).stream().limit(limit).toList();
+        logger.debug("Cache returned {} {} messages for consumerGroup={}", 
+                cached.size(), 
+                consumedFlag == null ? "(no consumed filter)" : "unconsumed", 
+                consumerGroup);
 
-        // Sort by createdAt to maintain consistent order
-        combinedMessages.sort(Comparator.comparing(Message::getCreatedAt));
+        if (cached.size() >= limit) {
+            List<Message> result = new ArrayList<>(cached);
+            result.sort(Comparator.comparing(Message::getCreatedAt));
+            logger.info("Returning {} {} messages for Consumer Group: {}", 
+                    result.size(), 
+                    consumedFlag == null ? "(no consumed filter)" : "unconsumed", 
+                    consumerGroup);
+            return result;
+        }
 
-        logger.info("Returning a combined list of {} unique messages for Consumer Group: {}", combinedMessages.size(), consumerGroup);
-        return combinedMessages;
+        Set<String> cachedIds = cached.stream().map(Message::getId).collect(Collectors.toSet());
+        int remaining = limit - cached.size();
+
+        Query query = new Query().limit(remaining);
+        if (Boolean.FALSE.equals(consumedFlag)) {
+            query.addCriteria(Criteria.where(CONSUMED).is(false));
+        }
+        if (!cachedIds.isEmpty()) {
+            query.addCriteria(Criteria.where(ID).nin(cachedIds));
+            logger.debug("Excluding {} cached IDs from MongoDB query{}", cachedIds.size(),
+                    consumedFlag == null ? " (no consumed filter)" : "");
+        }
+
+        List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
+
+        List<Message> combined = new ArrayList<>(cached.size() + fromDb.size());
+        combined.addAll(cached);
+        combined.addAll(fromDb);
+        combined.sort(Comparator.comparing(Message::getCreatedAt));
+
+        if (consumedFlag == null) {
+            logger.debug("MongoDB returned {} additional messages (no consumed filter) for consumerGroup={}", fromDb.size(), consumerGroup);
+            logger.info("Returning {} messages (no consumed filter) for Consumer Group: {}", combined.size(), consumerGroup);
+        } else {
+            logger.debug("MongoDB returned {} additional unconsumed messages for consumerGroup={}", fromDb.size(), consumerGroup);
+            logger.info("Returning {} unconsumed messages for Consumer Group: {}", combined.size(), consumerGroup);
+        }
+        return combined;
     }
 }
