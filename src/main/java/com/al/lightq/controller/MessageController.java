@@ -61,7 +61,8 @@ public class MessageController {
             @Size(max = 1048576, message = "Message size cannot exceed 1MB")
             @RequestBody String content
     ) {
-        logger.debug("Received push request for consumer group: {} with content: {}", consumerGroup, content);
+        int contentLength = content != null ? content.length() : 0;
+        logger.debug("Received push request for consumer group: {} with contentLength={} chars", consumerGroup, contentLength);
         String messageId = UUID.randomUUID().toString();
         Message message = new Message(messageId, consumerGroup, content);
         Message pushedMessage = pushMessageService.push(message);
@@ -101,6 +102,9 @@ public class MessageController {
     public ResponseEntity<?> view(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup, @RequestHeader(value = LightQConstants.MESSAGE_COUNT_HEADER) int messageCount,
                                   @RequestHeader(value = LightQConstants.CONSUMED, required = false) String consumed) {
         logger.debug("Received view request for consumer group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
+        if (StringUtils.isNotEmpty(consumed) && !consumed.equalsIgnoreCase("yes") && !consumed.equalsIgnoreCase("no")) {
+            logger.warn("Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.", consumed);
+        }
 
         if (messageCount < 1 || messageCount > messageAllowedCount) {
             logger.warn("Invalid message count requested: {}. Allowed range: 1 to {}", messageCount, messageAllowedCount);

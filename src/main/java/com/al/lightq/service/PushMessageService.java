@@ -48,16 +48,21 @@ public class PushMessageService {
      * @return The {@link Message} that was pushed.
      */
     public Message push(Message message) {
-        logger.debug("Attempting to push message with content: {} to Consumer Group: {}", message.getContent(), message.getConsumerGroup());
+        int contentLength = message.getContent() != null ? message.getContent().length() : 0;
+        logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars", message.getConsumerGroup(), contentLength);
         // Save the Message to Cache
         cacheService.addMessage(message);
         logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(), message.getConsumerGroup());
 
         // Save the Message to DB Asynchronously
         taskExecutor.execute(() -> {
-            createTTLIndex(message);
-            mongoTemplate.save(message, message.getConsumerGroup());
-            logger.info("Message with ID {} asynchronously saved to DB for Consumer Group: {}", message.getId(), message.getConsumerGroup());
+            try {
+                createTTLIndex(message);
+                mongoTemplate.save(message, message.getConsumerGroup());
+                logger.info("Message with ID {} asynchronously saved to DB for Consumer Group: {}", message.getId(), message.getConsumerGroup());
+            } catch (Exception e) {
+                logger.error("Failed to persist message asynchronously: messageId={}, consumerGroup={}, error={}", message.getId(), message.getConsumerGroup(), e.getMessage(), e);
+            }
         });
         return message;
     }

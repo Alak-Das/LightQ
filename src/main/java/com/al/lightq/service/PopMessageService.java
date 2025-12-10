@@ -52,7 +52,12 @@ public class PopMessageService {
         if (cachedMessage != null) {
             logger.debug("Message with ID {} found in cache for Consumer Group: {}. Asynchronously updating status in DB.", cachedMessage.getId(), consumerGroup);
             taskExecutor.execute(() -> {
-                updateMessageInMongo(cachedMessage.getId(), consumerGroup);
+                try {
+                    updateMessageInMongo(cachedMessage.getId(), consumerGroup);
+                    logger.debug("Asynchronous DB update completed for messageId={} consumerGroup={}", cachedMessage.getId(), consumerGroup);
+                } catch (Exception e) {
+                    logger.error("Failed to update message status asynchronously: messageId={}, consumerGroup={}, error={}", cachedMessage.getId(), consumerGroup, e.getMessage(), e);
+                }
             });
             return Optional.of(cachedMessage);
         }
