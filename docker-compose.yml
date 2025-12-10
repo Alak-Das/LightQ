@@ -1,41 +1,50 @@
-version: '3.8'
+version: "3.8"
 services:
   lightq-service:
-    build: .
+    build:
+      context: .
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      - MONGO_URI=mongodb://admin:password@mongodb:27017/?authSource=admin
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongodb:27017/?authSource=admin
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
+      # - SPRING_DATA_REDIS_PASSWORD=${SPRING_DATA_REDIS_PASSWORD}  # enable if Redis auth is configured
+      - JAVA_TOOL_OPTIONS=-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=75 -XX:+UseG1GC
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    restart: unless-stopped
 
   mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
+    image: mongo:7.0
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD-SHELL", "mongosh --quiet \"mongodb://$$MONGO_INITDB_ROOT_USERNAME:$$MONGO_INITDB_ROOT_PASSWORD@localhost:27017/admin?authSource=admin\" --eval \"db.adminCommand({ ping: 1 }).ok\""]
       interval: 10s
       timeout: 10s
-      retries: 5
-      start_period: 40s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
 
   redis:
-    image: redis:latest
-    ports:
-      - "6379:6379"
+    image: redis:7.2-alpine
+    # To enable authentication, uncomment and set SPRING_DATA_REDIS_PASSWORD in .env
+    # command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   mongo_data:

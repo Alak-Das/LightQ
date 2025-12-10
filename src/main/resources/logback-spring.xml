@@ -1,0 +1,24 @@
+<configuration scan="true" scanPeriod="30 seconds">
+    <!-- Console pattern with MDC context -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - rid=%X{requestId:-} method=%X{method:-} path=%X{path:-} cg=%X{consumerGroup:-} - %msg%n%ex{full}"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Our application logs at DEBUG to surface meaningful instrumentation -->
+    <logger name="com.al.lightq" level="DEBUG"/>
+
+    <!-- Reduce noise from frameworks -->
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="org.mongodb.driver" level="WARN"/>
+    <logger name="org.apache.http" level="WARN"/>
+    <logger name="io.lettuce.core" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

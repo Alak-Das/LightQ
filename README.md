@@ -202,6 +202,7 @@ These map to application.properties for container/deployment scenarios.
 | MONGO_URI | mongodb://admin:password@localhost:27017 | MongoDB connection string (supports auth) |
 | MONGO_DB | lightq-db | MongoDB database name |
 | SPRING_DATA_REDIS_HOST | localhost | Redis host (port is 6379 by default) |
+| SPRING_DATA_REDIS_PASSWORD | (none) | Redis password if auth is enabled |
 | SECURITY_USER_USERNAME | user | Basic auth user username |
 | SECURITY_USER_PASSWORD | password | Basic auth user password |
 | SECURITY_ADMIN_USERNAME | admin | Basic auth admin username |
@@ -385,21 +386,47 @@ mvn clean package -DskipTests
 
 This repository includes a multi-stage Dockerfile and a docker-compose.yml for local orchestration.
 
-### docker-compose (recommended for local)
+### Quick start (compose)
 ```bash
-docker-compose up -d --build
+cp .env.example .env  # then edit values as needed
+docker compose up -d --build
+# if your Docker version uses the legacy plugin:
+# docker-compose up -d --build
 ```
 
 Services:
-- mongodb (with root auth)
+- mongodb (root user from .env)
 - redis
 - lightq-service (application)
 
-Environment passed to the app (compose):
-- MONGO_URI=mongodb://admin:password@mongodb:27017/?authSource=admin
-- SPRING_DATA_REDIS_HOST=redis
+Notes:
+- App is exposed on 127.0.0.1:8080.
+- MongoDB and Redis ports are NOT published to the host by default. To access them from the host for debugging, temporarily add:
+  - mongodb: ports: ["127.0.0.1:27017:27017"]
+  - redis: ports: ["127.0.0.1:6379:6379"]
+- Images are pinned (mongo:7.0, redis:7.2-alpine). Containers use restart: unless-stopped.
+- Compose reads credentials from .env (see .env.example).
 
-Optionally, set SECURITY_* and RATE_LIMIT_* variables in docker-compose.yml to override credentials and limits.
+Environment passed to the app (compose):
+- MONGO_URI uses .env values:
+  mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/?authSource=admin
+- SPRING_DATA_REDIS_HOST=redis
+- Optionally SPRING_DATA_REDIS_PASSWORD if you enable Redis auth (see below)
+
+Enable Redis authentication (optional):
+1) Set SPRING_DATA_REDIS_PASSWORD in .env
+2) In docker-compose.yml, uncomment:
+   - redis command with --requirepass
+   - SPRING_DATA_REDIS_PASSWORD under lightq-service environment
+3) The app reads spring.data.redis.password from SPRING_DATA_REDIS_PASSWORD
+
+Diagnostics:
+```bash
+docker compose ps
+docker compose logs -f lightq-service
+docker compose logs -f mongodb
+docker compose logs -f redis
+```
 
 ### Manual Docker build/run
 ```bash
@@ -419,7 +446,7 @@ docker run -p 8080:8080 \
   lightq:latest
 ```
 
-Image uses a distroless Java 21 runtime.
+Image uses a distroless Java 21 nonroot runtime.
 
 ## 11. Security
 

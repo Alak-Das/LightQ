@@ -48,7 +48,6 @@ public class ViewMessageService {
         List<Message> combinedMessages = new ArrayList<>();
 
         Query query = new Query();
-        // Removed: query.addCriteria(Criteria.where("consumerGroup").is(consumerGroup)); // Redundant as collection name is consumerGroup
 
         if (consumed != null) {
             if (consumed.equalsIgnoreCase("yes")) {

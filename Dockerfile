@@ -8,7 +8,8 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Runtime stage
-FROM gcr.io/distroless/java21-debian12
+FROM gcr.io/distroless/java21-debian12:nonroot
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java","-jar","app.jar"]
+COPY --from=build /app/target/*.jar /app/app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","/app/app.jar"]

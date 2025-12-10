@@ -1,0 +1,29 @@
+# VCS
+.git
+.gitignore
+
+# Build artifacts
+target/
+**/target/
+
+# IDE & OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Maven wrapper and caches (not needed in image)
+.mvn/
+.mvn/** 
+mvnw
+mvnw.cmd
+
+# Node/yarn caches if present
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Others
+*.swp
+*.tmp
