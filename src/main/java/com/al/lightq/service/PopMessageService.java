@@ -3,7 +3,6 @@ package com.al.lightq.service;
 import com.al.lightq.model.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
@@ -25,15 +24,15 @@ import static com.al.lightq.util.LightQConstants.*;
 @Service
 public class PopMessageService {
 
-    @Autowired
-    private MongoTemplate mongoTemplate;
+    private final MongoTemplate mongoTemplate;
+    private final CacheService cacheService;
+    private final Executor taskExecutor;
 
-    @Autowired
-    private CacheService cacheService;
-
-    @Autowired
-    @Qualifier("taskExecutor")
-    private Executor taskExecutor;
+    public PopMessageService(MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor) {
+        this.mongoTemplate = mongoTemplate;
+        this.cacheService = cacheService;
+        this.taskExecutor = taskExecutor;
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(PopMessageService.class);
 

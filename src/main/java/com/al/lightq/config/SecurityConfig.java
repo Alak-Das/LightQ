@@ -14,7 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -39,7 +38,7 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests((requests) -> requests
                         .requestMatchers(LightQConstants.QUEUE_BASE_URL + LightQConstants.PUSH_URL, LightQConstants.QUEUE_BASE_URL + LightQConstants.POP_URL).hasAnyRole(LightQConstants.USER_ROLE, LightQConstants.ADMIN_ROLE)
-                        .requestMatchers(LightQConstants.QUEUE_BASE_URL + LightQConstants.VIEW_URL).access(new WebExpressionAuthorizationManager(LightQConstants.HAS_ADMIN_ROLE))
+                        .requestMatchers(LightQConstants.QUEUE_BASE_URL + LightQConstants.VIEW_URL).hasRole(LightQConstants.ADMIN_ROLE)
                         .anyRequest().authenticated()
                 )
                 .httpBasic(withDefaults())

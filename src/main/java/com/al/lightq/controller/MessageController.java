@@ -13,7 +13,6 @@ import jakarta.validation.constraints.Size;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,14 +31,15 @@ public class MessageController {
 
     private static final Logger logger = LoggerFactory.getLogger(MessageController.class);
 
-    @Autowired
-    private PushMessageService pushMessageService;
+    private final PushMessageService pushMessageService;
+    private final PopMessageService popMessageService;
+    private final ViewMessageService viewMessageService;
 
-    @Autowired
-    private PopMessageService popMessageService;
-
-    @Autowired
-    private ViewMessageService viewMessageService;
+    public MessageController(PushMessageService pushMessageService, PopMessageService popMessageService, ViewMessageService viewMessageService) {
+        this.pushMessageService = pushMessageService;
+        this.popMessageService = popMessageService;
+        this.viewMessageService = viewMessageService;
+    }
 
     @Value("${no.of.message.allowed.to.fetch}")
     private long messageAllowedCount;

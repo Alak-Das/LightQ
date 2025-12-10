@@ -7,7 +7,6 @@ import com.mongodb.client.model.IndexOptions;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -26,19 +25,21 @@ import static com.al.lightq.util.LightQConstants.CREATED_AT;
 public class PushMessageService {
 
     private static final Logger logger = LoggerFactory.getLogger(PushMessageService.class);
-    @Autowired
-    private MongoClient mongoClient;
+    private final MongoClient mongoClient;
     @Value("${spring.data.mongodb.database}")
     private String mongoDB;
     @Value("${persistence.duration.minutes}")
     private long expireMinutes;
-    @Autowired
-    private MongoTemplate mongoTemplate;
-    @Autowired
-    private CacheService cacheService;
-    @Autowired
-    @Qualifier("taskExecutor")
-    private Executor taskExecutor;
+    private final MongoTemplate mongoTemplate;
+    private final CacheService cacheService;
+    private final Executor taskExecutor;
+
+    public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor) {
+        this.mongoClient = mongoClient;
+        this.mongoTemplate = mongoTemplate;
+        this.cacheService = cacheService;
+        this.taskExecutor = taskExecutor;
+    }
 
     /**
      * Pushes a message to the queue. The message is first added to a cache for immediate availability,

@@ -4,7 +4,6 @@ import com.al.lightq.model.Message;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -25,21 +24,22 @@ import static com.al.lightq.util.LightQConstants.*;
 @Service
 public class ViewMessageService {
 
-    @Autowired
-    private MongoTemplate mongoTemplate;
-
-    @Autowired
-    private CacheService cacheService;
-
     private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
+    private final MongoTemplate mongoTemplate;
+    private final CacheService cacheService;
+
+    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
+        this.mongoTemplate = mongoTemplate;
+        this.cacheService = cacheService;
+    }
 
     /**
      * Retrieves a list of messages for a given consumer group, with options to limit the count and filter by consumption status.
      * Messages are first retrieved from the cache and then from MongoDB, excluding duplicates.
      *
      * @param consumerGroup The consumer group for which to retrieve messages.
-     * @param messageCount The maximum number of messages to return.
-     * @param consumed An optional string ("yes" or "no") to filter messages by their consumed status.
+     * @param messageCount  The maximum number of messages to return.
+     * @param consumed      An optional string ("yes" or "no") to filter messages by their consumed status.
      * @return A sorted list of unique messages.
      */
     public List<Message> view(String consumerGroup, int messageCount, String consumed) {
@@ -54,7 +54,7 @@ public class ViewMessageService {
             if (consumed.equalsIgnoreCase("yes")) {
                 query.addCriteria(Criteria.where(CONSUMED).is(true));
                 logger.debug("Filtering messages to include only consumed messages.");
-            } else if (consumed.equalsIgnoreCase("no")) {
+            } else {
                 // Get from Cache
                 List<Message> cachedMessages = cacheService.viewMessages(consumerGroup).stream().limit(messageCount).toList();
                 combinedMessages.addAll(cachedMessages);
@@ -63,12 +63,12 @@ public class ViewMessageService {
                 Set<String> cachedMessageIds = cachedMessages.stream()
                         .map(Message::getId)
                         .collect(Collectors.toSet());
-                // Exclude messages already found in cache
+
                 if (!cachedMessageIds.isEmpty()) {
-                    if(cachedMessageIds.size() < messageCount){
+                    if (cachedMessageIds.size() < messageCount) {
                         query.addCriteria(Criteria.where(ID).nin(cachedMessageIds));
                         logger.debug("Excluding {} cached messages from MongoDB query.", cachedMessageIds.size());
-                    }else {
+                    } else {
                         logger.debug("All requested messages found in cache. Skipping MongoDB query.");
                         // Sort by createdAt to maintain consistent order
                         combinedMessages.sort(Comparator.comparing(Message::getCreatedAt));
@@ -81,7 +81,7 @@ public class ViewMessageService {
             }
         }
 
-        query.limit(messageCount - combinedMessages.size());
+        query.limit(Math.max(0, messageCount - combinedMessages.size()));
         List<Message> mongoMessages = mongoTemplate.find(query, Message.class, consumerGroup);
         combinedMessages.addAll(mongoMessages);
         logger.debug("Retrieved {} messages from MongoDB for Consumer Group: {}.", mongoMessages.size(), consumerGroup);
