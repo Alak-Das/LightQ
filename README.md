@@ -15,18 +15,20 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
 3. [Architecture Overview](#3-architecture-overview)
 4. [Technology Stack](#4-technology-stack)
 5. [Getting Started](#5-getting-started)
-6. [Configuration](#6-configuration)
-7. [Rate Limiting](#7-rate-limiting)
-8. [API Documentation](#8-api-documentation)
-9. [Logging & Observability](#9-logging--observability)
-10. [Testing](#10-testing)
-11. [Docker Deployment](#11-docker-deployment)
-12. [Security](#12-security)
-13. [Performance Considerations](#13-performance-considerations)
-14. [Troubleshooting](#14-troubleshooting)
-15. [Contributing](#15-contributing)
-16. [License](#16-license)
-17. [Support](#17-support)
+6. [Local Development](#6-local-development)
+7. [Configuration](#7-configuration)
+8. [Rate Limiting](#8-rate-limiting)
+9. [API Documentation](#9-api-documentation)
+10. [Logging & Observability](#10-logging--observability)
+11. [Testing](#11-testing)
+12. [Docker Deployment](#12-docker-deployment)
+13. [Security](#13-security)
+14. [Performance Considerations](#14-performance-considerations)
+15. [Troubleshooting](#15-troubleshooting)
+16. [Contributing](#16-contributing)
+17. [License](#17-license)
+18. [Support](#18-support)
+19. [Quick Reference Card](#19-quick-reference-card)
 
 ## 1. Project Overview
 
@@ -217,15 +219,15 @@ Each consumer group gets its own MongoDB collection:
 
 For Docker deployment, only Docker and Docker Compose are required.
 
-### Installation & Local Setup
+## 6. Local Development
 
-#### 1. Clone the Repository
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/Alak-Das/LightQ.git
 cd LightQ
 ```
 
-#### 2. Start Infrastructure Services
+### 2. Start Infrastructure Services
 
 **Option A: Using Docker Compose (Recommended)**
 ```bash
@@ -235,7 +237,7 @@ cp .env.example .env
 # Edit .env with your preferred credentials (optional)
 nano .env
 
-# Start MongoDB and Redis
+# Start MongoDB and Redis in the background
 docker compose up -d mongodb redis
 ```
 
@@ -248,42 +250,11 @@ mongod --dbpath /path/to/data --auth
 redis-server
 ```
 
-#### 3. Configure Application
+### 3. Configure Application
 
-Edit `src/main/resources/application.properties`:
+Edit `src/main/resources/application.properties` to match your local setup. The default values are configured to work with the provided `docker-compose.yml`.
 
-```properties
-# Server Configuration
-spring.application.name=lightq
-server.port=8080
-logging.level.root=INFO
-
-# Security (change these in production!)
-security.user.username=${SECURITY_USER_USERNAME:user}
-security.user.password=${SECURITY_USER_PASSWORD:password}
-security.admin.username=${SECURITY_ADMIN_USERNAME:admin}
-security.admin.password=${SECURITY_ADMIN_PASSWORD:adminpassword}
-
-# Business Logic
-no.of.message.allowed.to.fetch=50
-
-# MongoDB Configuration
-spring.data.mongodb.uri=${MONGO_URI:mongodb://admin:password@localhost:27017}
-spring.data.mongodb.database=${MONGO_DB:lightq-db}
-persistence.duration.minutes=30
-
-# Redis Configuration
-spring.data.redis.host=${SPRING_DATA_REDIS_HOST:localhost}
-spring.data.redis.port=6379
-spring.data.redis.password=${SPRING_DATA_REDIS_PASSWORD:}
-cache.ttl.minutes=5
-
-# Rate Limiting (requests per second, 0 = disabled)
-rate.limit.push-per-second=${RATE_LIMIT_PUSH_PER_SECOND:10}
-rate.limit.pop-per-second=${RATE_LIMIT_POP_PER_SECOND:10}
-```
-
-#### 4. Build the Application
+### 4. Build the Application
 ```bash
 # Using Maven
 mvn clean package
@@ -295,7 +266,7 @@ mvn clean package
 mvn clean package -DskipTests
 ```
 
-#### 5. Run the Application
+### 5. Run the Application
 ```bash
 # Using Maven
 mvn spring-boot:run
@@ -307,19 +278,13 @@ java -jar target/lightq-0.0.1-SNAPSHOT.jar
 java -jar target/lightq-0.0.1-SNAPSHOT.jar --server.port=9090
 ```
 
-### Verify Installation
+### 6. Verify Installation
 
 #### 1. Check Application Logs
-```
-2025-01-01 10:00:00.000  INFO 12345 --- [main] c.a.l.LightQApplication: Started LightQApplication in 3.456 seconds
-2025-01-01 10:00:00.100  INFO 12345 --- [main] c.a.l.c.StartupLogger: Startup configuration: rateLimits pushPerSec=10, popPerSec=10
-2025-01-01 10:00:00.101  INFO 12345 --- [main] c.a.l.c.StartupLogger: Startup configuration: messageAllowedCount=50
-2025-01-01 10:00:00.102  INFO 12345 --- [main] c.a.l.c.StartupLogger: Startup configuration: redis host=localhost, port=6379, ttlMinutes=5
-2025-01-01 10:00:00.103  INFO 12345 --- [main] c.a.l.c.StartupLogger: Startup configuration: mongo database=lightq-db, persistenceTTLMinutes=30
-```
+You should see logs indicating that the application has started successfully.
 
 #### 2. Access Swagger UI
-Open browser: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+Open your browser and navigate to [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 
 #### 3. Test API Endpoints
 ```bash
@@ -339,12 +304,7 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
   -H "messageCount: 10"
 ```
 
-#### 4. Check OpenAPI Spec
-```bash
-curl http://localhost:8080/v3/api-docs | jq
-```
-
-## 6. Configuration
+## 7. Configuration
 
 ### Environment Variables
 
@@ -413,7 +373,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
 - **Authentication**: Supports username/password via `MONGO_URI`
     - Example: `mongodb://user:pass@host:port/?authSource=admin`
 
-## 7. Rate Limiting
+## 8. Rate Limiting
 
 LightQ implements a simple yet effective fixed-window per-second rate limiter to protect against abuse and ensure fair resource allocation.
 
@@ -463,7 +423,7 @@ With `rate.limit.push-per-second=10`:
     - Distributed rate limiting (Redis-based) for multi-instance deployments
     - Token bucket algorithm for burst handling
 
-## 8. API Documentation
+## 9. API Documentation
 
 ### Base URL
 ```
@@ -694,7 +654,7 @@ All errors follow a consistent JSON structure:
 - Machine-readable API specification
 - Import into Postman, Insomnia, or other API clients
 
-## 9. Logging & Observability
+## 10. Logging & Observability
 
 LightQ implements structured logging with correlation tracking for production-grade observability.
 
@@ -812,7 +772,7 @@ INFO  [main] c.a.l.c.StartupLogger - Startup configuration: mongo database=light
 4. **Correlation Tracking**: Use `requestId` to trace requests across services
 5. **Alerting**: Set up alerts on ERROR level logs and rate limit warnings
 
-## 10. Testing
+## 11. Testing
 
 LightQ includes comprehensive unit and integration tests with **60+ test cases** covering all service layers, controllers, and configurations.
 
@@ -962,7 +922,7 @@ class MessageControllerTest {
 }
 ```
 
-## 11. Docker Deployment
+## 12. Docker Deployment
 
 LightQ provides production-ready containerization with multi-stage builds and Docker Compose orchestration.
 
@@ -973,7 +933,7 @@ LightQ provides production-ready containerization with multi-stage builds and Do
 git clone https://github.com/Alak-Das/LightQ.git
 cd LightQ
 
-# Create environment file
+# Create environment file from the example
 cp .env.example .env
 
 # Edit credentials (recommended for production)
@@ -1002,21 +962,22 @@ RATE_LIMIT_POP_PER_SECOND=20
 
 #### 2. Start All Services
 ```bash
+# Build and start all services in the background
 docker compose up -d --build
 
-# View logs
+# View logs for all services
 docker compose logs -f
 
-# View specific service logs
+# View logs for a specific service
 docker compose logs -f lightq-service
 ```
 
 #### 3. Verify Deployment
 ```bash
-# Check service status
+# Check the status of all services
 docker compose ps
 
-# Test API
+# Test the API
 curl -u appuser:userPass456 -X POST "http://localhost:8080/queue/push" \
   -H "consumerGroup: docker-test" \
   -H "Content-Type: text/plain" \
@@ -1025,13 +986,13 @@ curl -u appuser:userPass456 -X POST "http://localhost:8080/queue/push" \
 
 #### 4. Stop Services
 ```bash
-# Stop without removing volumes
+# Stop services without removing volumes
 docker compose stop
 
 # Stop and remove containers (keeps volumes)
 docker compose down
 
-# Stop and remove everything including volumes
+# Stop and remove everything, including volumes
 docker compose down -v
 ```
 
@@ -1184,7 +1145,7 @@ lightq-service:
 6. **Enable monitoring**: Add Prometheus, Grafana, or application performance monitoring
 7. **Configure logging driver**: Ship logs to centralized logging system
 
-## 12. Security
+## 13. Security
 
 LightQ implements multiple security layers to protect against common vulnerabilities.
 
@@ -1292,7 +1253,7 @@ Acts as a defense against:
 - **Brute force**: Limits login attempt rate (HTTP 401 responses)
 - **Resource exhaustion**: Protects thread pool and database from overload
 
-See [Section 7: Rate Limiting](#7-rate-limiting) for configuration details.
+See [Section 8: Rate Limiting](#8-rate-limiting) for configuration details.
 
 ### Dependency Security
 
@@ -1337,7 +1298,7 @@ mvn versions:use-latest-releases
 - [ ] Penetration testing (annual or after major changes)
 - [ ] Monitor for suspicious activity (unusual rate limit hits, failed auth)
 
-## 13. Performance Considerations
+## 14. Performance Considerations
 
 ### Throughput Estimates
 
@@ -1454,7 +1415,7 @@ Multiple LightQ instances with shared infrastructure:
 - **Application Performance Monitoring**: New Relic, Datadog, Dynatrace
 - **Log Analytics**: ELK Stack, Splunk
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -1704,7 +1665,7 @@ docker compose exec lightq-service nc -zv redis 6379
 docker compose exec lightq-service nc -zv mongodb 27017
 ```
 
-## 15. Contributing
+## 16. Contributing
 
 We welcome contributions to LightQ! Here's how you can help improve the project.
 
@@ -1833,7 +1794,7 @@ We welcome contributions to LightQ! Here's how you can help improve the project.
 - Focus on the best solution, not ego
 - Help others learn and grow
 
-## 16. License
+## 17. License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for full details.
 
@@ -1869,7 +1830,7 @@ SOFTWARE.
 - ⚠️ No warranty provided
 - ⚠️ No liability accepted
 
-## 17. Support
+## 18. Support
 
 ### Getting Help
 
@@ -1907,7 +1868,7 @@ Special thanks to:
 
 ---
 
-## Quick Reference Card
+## 19. Quick Reference Card
 
 ### Essential Commands
 
