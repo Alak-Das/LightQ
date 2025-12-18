@@ -6,7 +6,6 @@ import com.al.lightq.model.MessageResponse;
 import com.al.lightq.service.PopMessageService;
 import com.al.lightq.service.PushMessageService;
 import com.al.lightq.service.ViewMessageService;
-import com.al.lightq.util.LightQConstants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -24,7 +23,9 @@ import static com.al.lightq.util.LightQConstants.*;
 
 /**
  * REST controller for handling message-related operations in the Simple Queue Service.
+ * <p>
  * Provides endpoints for pushing, popping, and viewing messages within consumer groups.
+ * </p>
  */
 @RestController
 @RequestMapping(QUEUE_BASE_URL)

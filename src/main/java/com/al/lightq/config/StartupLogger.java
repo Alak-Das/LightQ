@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Logs key runtime configuration and limits at startup for operational visibility.
+ * <p>
  * Avoids logging secrets (no credentials or full URIs).
+ * </p>
  */
 @Component
 public class StartupLogger implements ApplicationRunner {
@@ -33,6 +35,9 @@ public class StartupLogger implements ApplicationRunner {
     @Value("${spring.data.mongodb.database}")
     private String mongoDb;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void run(ApplicationArguments args) {
         logger.info("Startup configuration: rateLimits pushPerSec={}, popPerSec={}",

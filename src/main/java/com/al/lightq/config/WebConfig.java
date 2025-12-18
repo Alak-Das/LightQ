@@ -7,6 +7,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * Configuration for web-related beans and interceptors.
+ * <p>
+ * This class enables the {@link RateLimitProperties} and registers the {@link RateLimitingInterceptor}.
+ * </p>
+ */
 @Configuration
 @EnableConfigurationProperties(RateLimitProperties.class)
 public class WebConfig implements WebMvcConfigurer {
@@ -17,11 +23,19 @@ public class WebConfig implements WebMvcConfigurer {
         this.rateLimitProperties = rateLimitProperties;
     }
 
+    /**
+     * Creates a rate limiting interceptor.
+     *
+     * @return the rate limiting interceptor
+     */
     @Bean
     public RateLimitingInterceptor rateLimitingInterceptor() {
         return new RateLimitingInterceptor(rateLimitProperties);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitingInterceptor())

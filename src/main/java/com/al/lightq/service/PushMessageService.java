@@ -19,8 +19,10 @@ import java.util.concurrent.TimeUnit;
 import static com.al.lightq.util.LightQConstants.CREATED_AT;
 
 /**
- * Service for pushing messages to the queue. Messages are added to a cache
- * and then asynchronously persisted to MongoDB with a TTL index.
+ * Service for pushing messages to the queue.
+ * <p>
+ * Messages are added to a cache and then asynchronously persisted to MongoDB with a TTL index.
+ * </p>
  */
 @Service
 public class PushMessageService {
@@ -43,8 +45,11 @@ public class PushMessageService {
     }
 
     /**
-     * Pushes a message to the queue. The message is first added to a cache for immediate availability,
+     * Pushes a message to the queue.
+     * <p>
+     * The message is first added to a cache for immediate availability,
      * and then saved to MongoDB asynchronously. A TTL index is ensured for the message's collection.
+     * </p>
      *
      * @param message The {@link Message} object to be pushed.
      * @return The {@link Message} that was pushed.
@@ -71,7 +76,9 @@ public class PushMessageService {
 
     /**
      * Ensures a TTL (Time-To-Live) index exists on the 'createdAt' field for the message's collection.
+     * <p>
      * This index automatically deletes documents after a specified time.
+     * </p>
      *
      * @param message The {@link Message} for which to ensure the TTL index.
      */

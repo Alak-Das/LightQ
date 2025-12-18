@@ -13,6 +13,12 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
 
+/**
+ * Configuration for Redis.
+ * <p>
+ * This class sets up the Redis cache manager and template.
+ * </p>
+ */
 @Configuration
 public class RedisConfig {
 
@@ -22,6 +28,12 @@ public class RedisConfig {
         this.lightQProperties = lightQProperties;
     }
 
+    /**
+     * Creates a Redis cache manager.
+     *
+     * @param redisConnectionFactory the Redis connection factory
+     * @return the cache manager
+     */
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
         RedisCacheConfiguration cacheConfiguration = RedisCacheConfiguration.defaultCacheConfig()
@@ -33,6 +45,12 @@ public class RedisConfig {
                 .build();
     }
 
+    /**
+     * Creates a Redis template.
+     *
+     * @param connectionFactory the Redis connection factory
+     * @return the Redis template
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();

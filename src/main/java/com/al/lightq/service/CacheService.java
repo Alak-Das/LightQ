@@ -13,6 +13,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Service for interacting with the Redis cache.
+ * <p>
+ * This class provides methods for adding, popping, and viewing messages in the cache.
+ * </p>
+ */
 @Service
 public class CacheService {
     private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
@@ -25,6 +31,11 @@ public class CacheService {
         this.lightQProperties = lightQProperties;
     }
 
+    /**
+     * Adds a message to the cache.
+     *
+     * @param message the message to add
+     */
     public void addMessage(Message message) {
         String key = LightQConstants.CACHE_PREFIX + message.getConsumerGroup();
         long redisCacheTtlMinutes = lightQProperties.getCacheTtlMinutes();
@@ -33,6 +44,12 @@ public class CacheService {
         redisTemplate.expire(key, Duration.ofMinutes(redisCacheTtlMinutes));
     }
 
+    /**
+     * Pops a message from the cache.
+     *
+     * @param consumerGroup the consumer group
+     * @return the popped message, or null if no message was popped
+     */
     public Message popMessage(String consumerGroup) {
         String key = LightQConstants.CACHE_PREFIX + consumerGroup;
         Message popped = (Message) redisTemplate.opsForList().rightPop(key);
@@ -44,6 +61,12 @@ public class CacheService {
         return popped;
     }
 
+    /**
+     * Views messages in the cache.
+     *
+     * @param consumerGroup the consumer group
+     * @return the list of messages
+     */
     public List<Message> viewMessages(String consumerGroup) {
         String key = LightQConstants.CACHE_PREFIX + consumerGroup;
         List<Object> cachedObjects = redisTemplate.opsForList().range(key, 0, -1);

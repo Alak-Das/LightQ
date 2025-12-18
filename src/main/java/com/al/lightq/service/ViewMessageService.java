@@ -1,6 +1,5 @@
 package com.al.lightq.service;
 
-import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -20,7 +19,9 @@ import static com.al.lightq.util.LightQConstants.*;
 
 /**
  * Service for viewing messages in the queue for a specific consumer group.
+ * <p>
  * It retrieves messages from both cache and MongoDB, combines them, and applies filtering and sorting.
+ * </p>
  */
 @Service
 public class ViewMessageService {
@@ -36,7 +37,9 @@ public class ViewMessageService {
 
     /**
      * Retrieves a list of messages for a given consumer group, with options to limit the count and filter by consumption status.
+     * <p>
      * Messages are first retrieved from the cache and then from MongoDB, excluding duplicates.
+     * </p>
      *
      * @param consumerGroup The consumer group for which to retrieve messages.
      * @param limit The maximum number of messages to return.
@@ -45,8 +48,8 @@ public class ViewMessageService {
      */
     public List<Message> view(String consumerGroup, int limit, String consumed) {
         final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
-        final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf("yes".equalsIgnoreCase(consumed)) : null;
-        logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : "N/A");
+        final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf(YES.equalsIgnoreCase(consumed)) : null;
+        logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : NA);
 
         // Fast-path: only consumed => DB only
         if (Boolean.TRUE.equals(consumedFlag)) {

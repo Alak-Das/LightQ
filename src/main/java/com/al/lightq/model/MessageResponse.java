@@ -6,6 +6,12 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+/**
+ * Represents a response containing a message.
+ * <p>
+ * This class is used to create a consistent response format for messages.
+ * </p>
+ */
 @Data
 @NoArgsConstructor
 public class MessageResponse {

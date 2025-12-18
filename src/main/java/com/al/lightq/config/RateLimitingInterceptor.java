@@ -13,7 +13,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Simple fixed-window per-second rate limiter for specific endpoints.
- * Limits are configured via RateLimitProperties.
+ * <p>
+ * Limits are configured via {@link RateLimitProperties}.
+ * </p>
  */
 public class RateLimitingInterceptor implements HandlerInterceptor {
 
@@ -25,6 +27,9 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         this.properties = properties;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String uri = request.getRequestURI();
@@ -43,6 +48,13 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    /**
+     * Checks if a request is allowed for a given key and limit.
+     *
+     * @param key            the key to check
+     * @param limitPerSecond the limit per second
+     * @return true if the request is allowed, false otherwise
+     */
     private boolean allow(String key, int limitPerSecond) {
         if (limitPerSecond <= 0) {
             // non-positive value disables limiting
@@ -52,10 +64,19 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         return counter.allow(limitPerSecond);
     }
 
+    /**
+     * A simple rate counter.
+     */
     private static class RateCounter {
         private volatile long windowSecond = -1L;
         private final AtomicInteger count = new AtomicInteger(0);
 
+        /**
+         * Checks if a request is allowed for a given limit.
+         *
+         * @param limit the limit
+         * @return true if the request is allowed, false otherwise
+         */
         // synchronize to ensure atomic reset + increment across threads
         synchronized boolean allow(int limit) {
             long nowSec = Instant.now().getEpochSecond();

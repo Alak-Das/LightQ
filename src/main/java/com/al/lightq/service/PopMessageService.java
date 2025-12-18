@@ -19,7 +19,9 @@ import static com.al.lightq.util.LightQConstants.*;
 
 /**
  * Service for popping messages, prioritizing cache and then falling back to the database.
+ * <p>
  * Messages popped from the cache are asynchronously marked as consumed in the database.
+ * </p>
  */
 @Service
 public class PopMessageService {
@@ -38,8 +40,10 @@ public class PopMessageService {
 
     /**
      * Pops the oldest available message for a given consumer group.
+     * <p>
      * It first tries to fetch the message from the cache. If not found, it fetches from the database.
      * Messages fetched from cache are asynchronously marked as consumed in the database.
+     * </p>
      *
      * @param consumerGroup The consumer group from which to pop the message.
      * @return An {@link Optional} containing the message if found, or empty if no message is available.

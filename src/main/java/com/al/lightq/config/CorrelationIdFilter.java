@@ -17,11 +17,14 @@ import java.util.UUID;
 
 /**
  * Filter that:
- * - Establishes a correlation/request ID for each request (reads X-Request-Id/X-Correlation-Id or generates one)
- * - Puts useful request context into MDC (requestId, path, method, consumerGroup) for log enrichment
- * - Logs a concise start/end line with timing and status
- *
+ * <ul>
+ *     <li>Establishes a correlation/request ID for each request (reads X-Request-Id/X-Correlation-Id or generates one)</li>
+ *     <li>Puts useful request context into MDC (requestId, path, method, consumerGroup) for log enrichment</li>
+ *     <li>Logs a concise start/end line with timing and status</li>
+ * </ul>
+ * <p>
  * MDC entries can be referenced in logging patterns with %X{requestId}, etc.
+ * </p>
  */
 @Component
 public class CorrelationIdFilter extends OncePerRequestFilter {
@@ -35,6 +38,9 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     private static final String HDR_REQUEST_ID = "X-Request-Id";
     private static final String HDR_CORRELATION_ID = "X-Correlation-Id";
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -70,6 +76,12 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * Returns the first non-blank string from a list of candidates.
+     *
+     * @param candidates the candidates
+     * @return the first non-blank string, or null if none are found
+     */
     private static String firstNonBlank(String... candidates) {
         for (String c : candidates) {
             if (StringUtils.isNotBlank(c)) {

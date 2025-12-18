@@ -8,10 +8,22 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.slf4j.MDC;
 import org.springframework.core.task.TaskDecorator;
 
+/**
+ * Configuration for asynchronous processing.
+ * <p>
+ * This class sets up a thread pool for executing tasks asynchronously.
+ * It also configures the thread pool to propagate the MDC context to child threads.
+ * </p>
+ */
 @Configuration
 @EnableAsync
 public class AsyncConfig {
 
+    /**
+     * Creates a thread pool task executor.
+     *
+     * @return the thread pool task executor
+     */
     @Bean(name = "taskExecutor")
     public ThreadPoolTaskExecutor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

@@ -9,11 +9,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+/**
+ * Global exception handler for the application.
+ * <p>
+ * This class handles all exceptions thrown by the application and returns a consistent error response.
+ * </p>
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Handles all unhandled exceptions.
+     *
+     * @param ex      the exception
+     * @param request the request
+     * @return the error response
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception ex, HttpServletRequest request) {
         String requestId = MDC.get("requestId");
@@ -29,6 +42,13 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    /**
+     * Handles illegal argument exceptions.
+     *
+     * @param ex      the exception
+     * @param request the request
+     * @return the error response
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
         String requestId = MDC.get("requestId");
@@ -44,6 +64,13 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Handles rate limit exceeded exceptions.
+     *
+     * @param ex      the exception
+     * @param request the request
+     * @return the error response
+     */
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<ErrorResponse> handleRateLimitExceeded(RateLimitExceededException ex, HttpServletRequest request) {
         String requestId = MDC.get("requestId");

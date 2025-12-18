@@ -1,5 +1,8 @@
 package com.al.lightq.util;
 
+/**
+ * Constants used throughout the application.
+ */
 public class LightQConstants {
 
     public static final String ID = "id";

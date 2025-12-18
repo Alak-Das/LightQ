@@ -17,6 +17,12 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+/**
+ * Configuration for security.
+ * <p>
+ * This class sets up the security filter chain, user details service, and password encoder.
+ * </p>
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -33,6 +39,13 @@ public class SecurityConfig {
     @Value("${security.admin.password}")
     private String adminPassword;
 
+    /**
+     * Creates a security filter chain.
+     *
+     * @param http the HttpSecurity
+     * @return the security filter chain
+     * @throws Exception if an error occurs
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -47,6 +60,12 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Creates a user details service.
+     *
+     * @param passwordEncoder the password encoder
+     * @return the user details service
+     */
     @Bean
     public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
         UserDetails user =
@@ -66,6 +85,11 @@ public class SecurityConfig {
         return new InMemoryUserDetailsManager(user, admin);
     }
 
+    /**
+     * Creates a password encoder.
+     *
+     * @return the password encoder
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
