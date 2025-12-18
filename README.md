@@ -1,9 +1,9 @@
 # LightQ
 
-A lightweight, high-performance message queue service built with Spring Boot 3.3.4 and Java 21, providing RESTful APIs for asynchronous message processing with support for consumer groups, Redis caching, and MongoDB persistence.
+A lightweight, high-performance message queue service built with Spring Boot 3.3.5 and Java 21, providing RESTful APIs for asynchronous message processing with support for consumer groups, Redis caching, and MongoDB persistence.
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Redis](https://img.shields.io/badge/Redis-Cache-red.svg)](https://redis.io/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-green.svg)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://www.docker.com/)
@@ -73,7 +73,7 @@ LightQ prioritizes:
 - **Per-Endpoint Rate Limiting**: Configurable fixed-window rate limits on push/pop
 - **Request Tracing**: Correlation IDs for distributed request tracking
 - **OpenAPI Documentation**: Interactive Swagger UI with complete API specs
-- **Health Checks**: Docker compose includes MongoDB and Redis health checks
+- **Health Checks**: Application health endpoint and Docker Compose health checks for dependencies
 - **Containerized Deployment**: Multi-stage Dockerfile with distroless runtime
 
 ## 3. Architecture Overview
@@ -223,18 +223,18 @@ src/main/java/com/al/lightq/
 
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
-| **Framework** | Spring Boot | 3.3.4 | Application framework with auto-configuration |
+| **Framework** | Spring Boot | 3.3.5 | Application framework with auto-configuration |
 | **Language** | Java | 21 | LTS release with virtual threads support |
-| **Web** | spring-boot-starter-web | 3.3.4 | Embedded Tomcat, REST controllers |
-| **Monitoring** | Spring Boot Actuator | 3.3.4 | Health checks and application monitoring |
+| **Web** | spring-boot-starter-web | 3.3.5 | Embedded Tomcat, REST controllers |
+| **Monitoring** | Spring Boot Actuator | 3.3.5 | Health checks and application monitoring |
 | **Cache** | Redis | 7.2+ | High-speed in-memory data structure store |
-| **Cache Client** | Spring Data Redis | 3.3.4 | Redis integration with template abstraction |
+| **Cache Client** | Spring Data Redis | 3.3.5 | Redis integration with template abstraction |
 | **Database** | MongoDB | 7.0+ | Document-oriented NoSQL database |
-| **DB Client** | Spring Data MongoDB | 3.3.4 | MongoDB integration with template and repositories |
-| **Security** | spring-boot-starter-security | 3.3.4 | HTTP Basic Auth with BCrypt password encoding |
-| **Async** | ThreadPoolTaskExecutor | 3.3.4 | Asynchronous task execution with thread pool |
+| **DB Client** | Spring Data MongoDB | 3.3.5 | MongoDB integration with template and repositories |
+| **Security** | spring-boot-starter-security | 3.3.5 | HTTP Basic Auth with BCrypt password encoding |
+| **Async** | ThreadPoolTaskExecutor | 3.3.5 | Asynchronous task execution with thread pool |
 | **Documentation** | springdoc-openapi | 2.6.0 | OpenAPI 3.0 specs and Swagger UI |
-| **Validation** | spring-boot-starter-validation | 3.3.4 | JSR-380 Bean Validation (Hibernate Validator) |
+| **Validation** | spring-boot-starter-validation | 3.3.5 | JSR-380 Bean Validation (Hibernate Validator) |
 | **Utilities** | Lombok | Latest | Boilerplate reduction via annotations |
 | **Utilities** | Apache Commons Lang3 | (transitive) | String utilities, null-safe operations |
 | **Build Tool** | Maven | 3.9+ | Dependency management and build lifecycle |
@@ -242,7 +242,7 @@ src/main/java/com/al/lightq/
 | **Base Image** | Distroless Java 21 | Latest | Minimal, security-hardened runtime |
 | **Testing** | JUnit 5 | 5.10+ | Unit and integration testing framework |
 | **Testing** | Mockito | 5.x | Mocking framework for unit tests |
-| **Testing** | Spring Security Test | 3.3.4 | Security testing with @WithMockUser |
+| **Testing** | Spring Security Test | 3.3.5 | Security testing with @WithMockUser |
 
 ## 6. Getting Started
 
@@ -1080,30 +1080,34 @@ docker compose down -v
 ### Docker Compose Architecture
 
 ```yaml
-version: "3.8"
 services:
   lightq-service:
-    build: .
+    build:
+      context: .
     ports:
       - "127.0.0.1:8080:8080"  # Bind to localhost only
     environment:
-      - MONGO_URI=mongodb://...
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongodb:27017/?authSource=admin
       - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      # - SPRING_DATA_REDIS_PASSWORD=${SPRING_DATA_REDIS_PASSWORD}  # enable if Redis auth is configured
       - JAVA_TOOL_OPTIONS=-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=75 -XX:+UseG1GC
     depends_on:
-      mongodb: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   mongodb:
-    image: mongo:7.0
+    image: mongo:latest
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand({ ping: 1 })'"]
+      test: ["CMD-SHELL", "mongosh --quiet \"mongodb://$$MONGO_INITDB_ROOT_USERNAME:$$MONGO_INITDB_ROOT_PASSWORD@localhost:27017/admin?authSource=admin\" --eval \"db.adminCommand({ ping: 1 }).ok\""]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -1111,8 +1115,8 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7.2-alpine
-    # Uncomment for authentication:
+    image: redis:latest
+    # To enable authentication, uncomment and set SPRING_DATA_REDIS_PASSWORD in .env
     # command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
@@ -2007,7 +2011,7 @@ Client → [Rate Limiter] → [Controller] → [Service Layer]
 
 ---
 
-**Built with ❤️ using Spring Boot 3.3.4 and Java 21**
+**Built with ❤️ using Spring Boot 3.3.5 and Java 21**
 
 **Repository**: [https://github.com/Alak-Das/LightQ](https://github.com/Alak-Das/LightQ)
 
