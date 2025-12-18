@@ -1,6 +1,7 @@
 
 package com.al.lightq.service;
 
+import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,11 +35,13 @@ public class ViewMessageServiceTest {
     @Mock
     private CacheService cacheService;
 
+    @Mock
+    private LightQProperties lightQProperties;
+
     @InjectMocks
     private ViewMessageService viewMessageService;
 
     private String consumerGroup;
-    private int messageCount;
     private Message message1;
     private Message message2;
     private Message message3;
@@ -46,7 +49,6 @@ public class ViewMessageServiceTest {
     @BeforeEach
     void setUp() {
         consumerGroup = "testGroup";
-        messageCount = 10;
         message1 = new Message("id1", consumerGroup, "content1", Date.from(LocalDateTime.now().minusHours(3).atZone(ZoneId.systemDefault()).toInstant()), false);
         message2 = new Message("id2", consumerGroup, "content2", Date.from(LocalDateTime.now().minusHours(2).atZone(ZoneId.systemDefault()).toInstant()), true);
         message3 = new Message("id3", consumerGroup, "content3", Date.from(LocalDateTime.now().minusHours(1).atZone(ZoneId.systemDefault()).toInstant()), false);
@@ -54,11 +56,12 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_noConsumedFilter() {
+        when(lightQProperties.getMessageAllowedToFetch()).thenReturn(10);
         // When consumed is null, cache is consulted first, then DB tops up excluding cache IDs.
         when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message2, message3));
 
-        List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
+        List<Message> result = viewMessageService.view(consumerGroup, null);
 
         assertEquals(2, result.size());
         assertTrue(result.containsAll(Arrays.asList(message2, message3)));
@@ -68,9 +71,10 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_consumedYesFilter() {
+        when(lightQProperties.getMessageAllowedToFetch()).thenReturn(10);
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message2));
 
-        List<Message> result = viewMessageService.view(consumerGroup, messageCount, "yes");
+        List<Message> result = viewMessageService.view(consumerGroup, "yes");
 
         assertEquals(1, result.size());
         assertTrue(result.contains(message2));
@@ -80,10 +84,11 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_consumedNoFilter_cacheAndDb() {
+        when(lightQProperties.getMessageAllowedToFetch()).thenReturn(10);
         when(cacheService.viewMessages(consumerGroup)).thenReturn(Arrays.asList(message1));
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message3));
 
-        List<Message> result = viewMessageService.view(consumerGroup, messageCount, "no");
+        List<Message> result = viewMessageService.view(consumerGroup, "no");
 
         assertEquals(2, result.size());
         assertTrue(result.containsAll(Arrays.asList(message1, message3)));
@@ -93,10 +98,10 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_consumedNoFilter_onlyCache() {
-        messageCount = 1;
+        when(lightQProperties.getMessageAllowedToFetch()).thenReturn(1);
         when(cacheService.viewMessages(consumerGroup)).thenReturn(Arrays.asList(message1, message3));
 
-        List<Message> result = viewMessageService.view(consumerGroup, messageCount, "no");
+        List<Message> result = viewMessageService.view(consumerGroup, "no");
 
         assertEquals(1, result.size());
         assertTrue(result.contains(message1));
@@ -106,11 +111,12 @@ public class ViewMessageServiceTest {
 
     @Test
     void testView_emptyResult() {
+        when(lightQProperties.getMessageAllowedToFetch()).thenReturn(10);
         // When consumed is null, cache is checked first; if both cache and DB are empty, result is empty.
         when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(new ArrayList<>());
 
-        List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
+        List<Message> result = viewMessageService.view(consumerGroup, null);
 
         assertTrue(result.isEmpty());
         verify(cacheService, times(1)).viewMessages(consumerGroup);

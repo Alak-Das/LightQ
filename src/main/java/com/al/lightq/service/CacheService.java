@@ -1,8 +1,8 @@
 package com.al.lightq.service;
 
+import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import com.al.lightq.util.LightQConstants;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -18,16 +18,16 @@ public class CacheService {
     private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final LightQProperties lightQProperties;
 
-    @Value("${cache.ttl.minutes}")
-    private long redisCacheTtlMinutes;
-
-    public CacheService(RedisTemplate<String, Object> redisTemplate) {
+    public CacheService(RedisTemplate<String, Object> redisTemplate, LightQProperties lightQProperties) {
         this.redisTemplate = redisTemplate;
+        this.lightQProperties = lightQProperties;
     }
 
     public void addMessage(Message message) {
         String key = LightQConstants.CACHE_PREFIX + message.getConsumerGroup();
+        long redisCacheTtlMinutes = lightQProperties.getCacheTtlMinutes();
         logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), redisCacheTtlMinutes);
         redisTemplate.opsForList().leftPush(key, message);
         redisTemplate.expire(key, Duration.ofMinutes(redisCacheTtlMinutes));

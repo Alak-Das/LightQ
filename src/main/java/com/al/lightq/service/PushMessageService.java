@@ -1,5 +1,6 @@
 package com.al.lightq.service;
 
+import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
@@ -28,17 +29,17 @@ public class PushMessageService {
     private final MongoClient mongoClient;
     @Value("${spring.data.mongodb.database}")
     private String mongoDB;
-    @Value("${persistence.duration.minutes}")
-    private long expireMinutes;
     private final MongoTemplate mongoTemplate;
     private final CacheService cacheService;
     private final Executor taskExecutor;
+    private final LightQProperties lightQProperties;
 
-    public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor) {
+    public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor, LightQProperties lightQProperties) {
         this.mongoClient = mongoClient;
         this.mongoTemplate = mongoTemplate;
         this.cacheService = cacheService;
         this.taskExecutor = taskExecutor;
+        this.lightQProperties = lightQProperties;
     }
 
     /**
@@ -85,6 +86,7 @@ public class PushMessageService {
                 });
 
         if (!ttlExists) {
+            long expireMinutes = lightQProperties.getPersistenceDurationMinutes();
             logger.info("TTL index does not exist on field: {} for collection: {}. Creating with {} minutes expiration.", CREATED_AT, message.getConsumerGroup(), expireMinutes);
             IndexOptions indexOptions = new IndexOptions().expireAfter(expireMinutes, TimeUnit.MINUTES);
             collection.createIndex(new Document(CREATED_AT, 1), indexOptions);

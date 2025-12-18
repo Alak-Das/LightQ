@@ -1,5 +1,6 @@
 package com.al.lightq.service;
 
+import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -27,10 +28,12 @@ public class ViewMessageService {
     private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
     private final MongoTemplate mongoTemplate;
     private final CacheService cacheService;
+    private final LightQProperties lightQProperties;
 
-    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
+    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
         this.mongoTemplate = mongoTemplate;
         this.cacheService = cacheService;
+        this.lightQProperties = lightQProperties;
     }
 
     /**
@@ -38,12 +41,11 @@ public class ViewMessageService {
      * Messages are first retrieved from the cache and then from MongoDB, excluding duplicates.
      *
      * @param consumerGroup The consumer group for which to retrieve messages.
-     * @param messageCount  The maximum number of messages to return.
      * @param consumed      An optional string ("yes" or "no") to filter messages by their consumed status.
      * @return A sorted list of unique messages.
      */
-    public List<Message> view(String consumerGroup, int messageCount, String consumed) {
-        final int limit = Math.max(0, messageCount);
+    public List<Message> view(String consumerGroup, String consumed) {
+        final int limit = lightQProperties.getMessageAllowedToFetch();
         final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
         final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf("yes".equalsIgnoreCase(consumed)) : null;
         logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : "N/A");
@@ -61,17 +63,17 @@ public class ViewMessageService {
 
         // Cache-first for unconsumed or no filter
         List<Message> cached = cacheService.viewMessages(consumerGroup).stream().limit(limit).toList();
-        logger.debug("Cache returned {} {} messages for consumerGroup={}", 
-                cached.size(), 
-                consumedFlag == null ? "(no consumed filter)" : "unconsumed", 
+        logger.debug("Cache returned {} {} messages for consumerGroup={}",
+                cached.size(),
+                consumedFlag == null ? "(no consumed filter)" : "unconsumed",
                 consumerGroup);
 
         if (cached.size() >= limit) {
             List<Message> result = new ArrayList<>(cached);
             result.sort(Comparator.comparing(Message::getCreatedAt));
-            logger.info("Returning {} {} messages for Consumer Group: {}", 
-                    result.size(), 
-                    consumedFlag == null ? "(no consumed filter)" : "unconsumed", 
+            logger.info("Returning {} {} messages for Consumer Group: {}",
+                    result.size(),
+                    consumedFlag == null ? "(no consumed filter)" : "unconsumed",
                     consumerGroup);
             return result;
         }

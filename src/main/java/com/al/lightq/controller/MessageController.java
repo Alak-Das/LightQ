@@ -13,7 +13,6 @@ import jakarta.validation.constraints.Size;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,9 +39,6 @@ public class MessageController {
         this.popMessageService = popMessageService;
         this.viewMessageService = viewMessageService;
     }
-
-    @Value("${no.of.message.allowed.to.fetch}")
-    private long messageAllowedCount;
 
     /**
      * Pushes a new message to the queue for a specific consumer group.
@@ -94,24 +90,18 @@ public class MessageController {
      * Views messages in the queue for a specific consumer group, with optional filtering by consumption status.
      *
      * @param consumerGroup The header indicating the consumer group to view messages from.
-     * @param messageCount  The maximum number of messages to retrieve.
      * @param consumed      Optional header to filter messages by consumption status ("yes" for consumed, "no" for unconsumed).
      * @return A {@link ResponseEntity} containing a list of {@link Message} objects.
      */
     @GetMapping(LightQConstants.VIEW_URL)
-    public ResponseEntity<?> view(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup, @RequestHeader(value = LightQConstants.MESSAGE_COUNT_HEADER) int messageCount,
+    public ResponseEntity<?> view(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup,
                                   @RequestHeader(value = LightQConstants.CONSUMED, required = false) String consumed) {
-        logger.debug("Received view request for consumer group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
+        logger.debug("Received view request for consumer group: {}, consumed status: {}", consumerGroup, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
         if (StringUtils.isNotEmpty(consumed) && !consumed.equalsIgnoreCase("yes") && !consumed.equalsIgnoreCase("no")) {
             logger.warn("Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.", consumed);
         }
 
-        if (messageCount < 1 || messageCount > messageAllowedCount) {
-            logger.warn("Invalid message count requested: {}. Allowed range: 1 to {}", messageCount, messageAllowedCount);
-            return ResponseEntity.badRequest().body(new ErrorResponse(400, "Bad Request", String.format(LightQConstants.MESSAGE_COUNT_VALIDATION_ERROR_MESSAGE, messageAllowedCount), LightQConstants.QUEUE_BASE_URL + LightQConstants.VIEW_URL));
-        }
-
-        List<Message> messages = viewMessageService.view(consumerGroup, messageCount, consumed);
+        List<Message> messages = viewMessageService.view(consumerGroup, consumed);
         logger.info("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(), consumerGroup, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
         return ResponseEntity.ok(messages);
     }

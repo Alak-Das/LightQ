@@ -17,9 +17,11 @@ public class StartupLogger implements ApplicationRunner {
     private static final Logger logger = LoggerFactory.getLogger(StartupLogger.class);
 
     private final RateLimitProperties rateLimitProperties;
+    private final LightQProperties lightQProperties;
 
-    public StartupLogger(RateLimitProperties rateLimitProperties) {
+    public StartupLogger(RateLimitProperties rateLimitProperties, LightQProperties lightQProperties) {
         this.rateLimitProperties = rateLimitProperties;
+        this.lightQProperties = lightQProperties;
     }
 
     @Value("${spring.data.redis.host}")
@@ -28,26 +30,17 @@ public class StartupLogger implements ApplicationRunner {
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
-    @Value("${cache.ttl.minutes}")
-    private long cacheTtlMinutes;
-
     @Value("${spring.data.mongodb.database}")
     private String mongoDb;
-
-    @Value("${persistence.duration.minutes}")
-    private long persistenceMinutes;
-
-    @Value("${no.of.message.allowed.to.fetch}")
-    private long messageAllowedCount;
 
     @Override
     public void run(ApplicationArguments args) {
         logger.info("Startup configuration: rateLimits pushPerSec={}, popPerSec={}",
                 rateLimitProperties.getPushPerSecond(), rateLimitProperties.getPopPerSecond());
-        logger.info("Startup configuration: messageAllowedCount={}", messageAllowedCount);
+        logger.info("Startup configuration: messageAllowedCount={}", lightQProperties.getMessageAllowedToFetch());
         logger.info("Startup configuration: redis host={}, port={}, ttlMinutes={}",
-                redisHost, redisPort, cacheTtlMinutes);
+                redisHost, redisPort, lightQProperties.getCacheTtlMinutes());
         logger.info("Startup configuration: mongo database={}, persistenceTTLMinutes={}",
-                mongoDb, persistenceMinutes);
+                mongoDb, lightQProperties.getPersistenceDurationMinutes());
     }
 }

@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -95,46 +94,42 @@ public class MessageControllerTest {
     @Test
     @WithMockUser(username = "user", password = "password", roles = "USER")
     public void testViewForbiddenForUser() throws Exception {
-        when(viewMessageService.view(anyString(), anyInt(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
+        when(viewMessageService.view(anyString(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
 
         mockMvc.perform(get("/queue/view")
-                .header("consumerGroup", "testGroup")
-                .header("messageCount", "10"))
+                .header("consumerGroup", "testGroup"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     @WithMockUser(username = "admin", password = "adminpassword", roles = {"ADMIN", "USER"})
     public void testViewAsAdminWithoutProcessedHeader() throws Exception {
-        when(viewMessageService.view(anyString(), anyInt(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
+        when(viewMessageService.view(anyString(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
 
         mockMvc.perform(get("/queue/view")
-                .header("consumerGroup", "testGroup")
-                .header("messageCount", "10"))
+                .header("consumerGroup", "testGroup"))
                 .andExpect(status().isOk());
     }
 
     @Test
     @WithMockUser(username = "admin", password = "adminpassword", roles = {"ADMIN", "USER"})
     public void testViewAsAdminWithProcessedYes() throws Exception {
-        when(viewMessageService.view(anyString(), anyInt(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
+        when(viewMessageService.view(anyString(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
 
         mockMvc.perform(get("/queue/view")
                 .header("consumerGroup", "testGroup")
-                .header("consumed", "yes")
-                .header("messageCount", "10"))
+                .header("consumed", "yes"))
                 .andExpect(status().isOk());
     }
 
     @Test
     @WithMockUser(username = "admin", password = "adminpassword", roles = {"ADMIN", "USER"})
     public void testViewAsAdminWithProcessedNo() throws Exception {
-        when(viewMessageService.view(anyString(), anyInt(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
+        when(viewMessageService.view(anyString(), anyString())).thenReturn(Arrays.asList(new Message("someId", "testGroup", "Test message")));
 
         mockMvc.perform(get("/queue/view")
                 .header("consumerGroup", "testGroup")
-                .header("consumed", "no")
-                .header("messageCount", "10"))
+                .header("consumed", "no"))
                 .andExpect(status().isOk());
     }
 }

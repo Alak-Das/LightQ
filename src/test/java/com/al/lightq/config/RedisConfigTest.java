@@ -9,10 +9,10 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 class RedisConfigTest {
 
@@ -21,11 +21,14 @@ class RedisConfigTest {
     @Mock
     private RedisConnectionFactory redisConnectionFactory;
 
+    @Mock
+    private LightQProperties lightQProperties;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        redisConfig = new RedisConfig();
-        ReflectionTestUtils.setField(redisConfig, "redisCacheTtlMinutes", 60L);
+        when(lightQProperties.getCacheTtlMinutes()).thenReturn(60);
+        redisConfig = new RedisConfig(lightQProperties);
     }
 
     @Test
