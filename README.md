@@ -13,22 +13,23 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
 1. [Project Overview](#1-project-overview)
 2. [Key Features](#2-key-features)
 3. [Architecture Overview](#3-architecture-overview)
-4. [Technology Stack](#4-technology-stack)
-5. [Getting Started](#5-getting-started)
-6. [Local Development](#6-local-development)
-7. [Configuration](#7-configuration)
-8. [Rate Limiting](#8-rate-limiting)
-9. [API Documentation](#9-api-documentation)
-10. [Logging & Observability](#10-logging--observability)
-11. [Testing](#11-testing)
-12. [Docker Deployment](#12-docker-deployment)
-13. [Security](#13-security)
-14. [Performance Considerations](#14-performance-considerations)
-15. [Troubleshooting](#15-troubleshooting)
-16. [Contributing](#16-contributing)
-17. [License](#17-license)
-18. [Support](#18-support)
-19. [Quick Reference Card](#19-quick-reference-card)
+4. [Project Structure](#4-project-structure)
+5. [Technology Stack](#5-technology-stack)
+6. [Getting Started](#6-getting-started)
+7. [Local Development](#7-local-development)
+8. [Configuration](#8-configuration)
+9. [Rate Limiting](#9-rate-limiting)
+10. [API Documentation](#10-api-documentation)
+11. [Logging & Observability](#11-logging--observability)
+12. [Testing](#12-testing)
+13. [Docker Deployment](#13-docker-deployment)
+14. [Security](#14-security)
+15. [Performance Considerations](#15-performance-considerations)
+16. [Troubleshooting](#16-troubleshooting)
+17. [Contributing](#17-contributing)
+18. [License](#18-license)
+19. [Support](#19-support)
+20. [Quick Reference Card](#20-quick-reference-card)
 
 ## 1. Project Overview
 
@@ -184,7 +185,39 @@ Each consumer group gets its own MongoDB collection:
 - Enables efficient queries and independent TTL management
 - TTL index created on first write: `createdAt` field, expires after 30 minutes (default)
 
-## 4. Technology Stack
+## 4. Project Structure
+
+```
+src/main/java/com/al/lightq/
+├── LightQApplication.java          # Main application entry point
+├── config/                         # Spring configuration classes
+│   ├── AsyncConfig.java            # Configuration for asynchronous processing
+│   ├── CorrelationIdFilter.java    # Filter for adding correlation IDs to requests
+│   ├── RateLimitProperties.java    # Properties for rate limiting
+│   ├── RateLimitingInterceptor.java # Interceptor for rate limiting
+│   ├── RedisConfig.java            # Configuration for Redis
+│   ├── SecurityConfig.java         # Configuration for security
+│   ├── StartupLogger.java          # Logger for startup information
+│   └── WebConfig.java              # Configuration for web
+├── controller/                     # REST controllers
+│   └── MessageController.java      # Controller for handling message-related requests
+├── exception/                      # Custom exception classes
+│   ├── ErrorResponse.java          # Response model for errors
+│   ├── GlobalExceptionHandler.java # Global exception handler
+│   └── RateLimitExceededException.java # Exception for rate limit exceeded
+├── model/                          # Data models
+│   ├── Message.java                # Model for a message
+│   └── MessageResponse.java        # Response model for a message
+├── service/                        # Business logic
+│   ├── CacheService.java           # Service for interacting with the cache
+│   ├── PopMessageService.java      # Service for popping messages
+│   ├── PushMessageService.java     # Service for pushing messages
+│   └── ViewMessageService.java     # Service for viewing messages
+└── util/                           # Utility classes
+    └── LightQConstants.java        # Constants used throughout the application
+```
+
+## 5. Technology Stack
 
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
@@ -208,7 +241,7 @@ Each consumer group gets its own MongoDB collection:
 | **Testing** | Mockito | 5.x | Mocking framework for unit tests |
 | **Testing** | Spring Security Test | 3.3.4 | Security testing with @WithMockUser |
 
-## 5. Getting Started
+## 6. Getting Started
 
 ### Prerequisites
 
@@ -219,7 +252,7 @@ Each consumer group gets its own MongoDB collection:
 
 For Docker deployment, only Docker and Docker Compose are required.
 
-## 6. Local Development
+## 7. Local Development
 
 ### 1. Clone the Repository
 ```bash
@@ -304,7 +337,7 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
   -H "messageCount: 10"
 ```
 
-## 7. Configuration
+## 8. Configuration
 
 ### Environment Variables
 
@@ -373,7 +406,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
 - **Authentication**: Supports username/password via `MONGO_URI`
     - Example: `mongodb://user:pass@host:port/?authSource=admin`
 
-## 8. Rate Limiting
+## 9. Rate Limiting
 
 LightQ implements a simple yet effective fixed-window per-second rate limiter to protect against abuse and ensure fair resource allocation.
 
@@ -423,7 +456,7 @@ With `rate.limit.push-per-second=10`:
     - Distributed rate limiting (Redis-based) for multi-instance deployments
     - Token bucket algorithm for burst handling
 
-## 9. API Documentation
+## 10. API Documentation
 
 ### Base URL
 ```
@@ -654,7 +687,7 @@ All errors follow a consistent JSON structure:
 - Machine-readable API specification
 - Import into Postman, Insomnia, or other API clients
 
-## 10. Logging & Observability
+## 11. Logging & Observability
 
 LightQ implements structured logging with correlation tracking for production-grade observability.
 
@@ -772,7 +805,7 @@ INFO  [main] c.a.l.c.StartupLogger - Startup configuration: mongo database=light
 4. **Correlation Tracking**: Use `requestId` to trace requests across services
 5. **Alerting**: Set up alerts on ERROR level logs and rate limit warnings
 
-## 11. Testing
+## 12. Testing
 
 LightQ includes comprehensive unit and integration tests with **60+ test cases** covering all service layers, controllers, and configurations.
 
@@ -922,7 +955,7 @@ class MessageControllerTest {
 }
 ```
 
-## 12. Docker Deployment
+## 13. Docker Deployment
 
 LightQ provides production-ready containerization with multi-stage builds and Docker Compose orchestration.
 
@@ -1145,7 +1178,7 @@ lightq-service:
 6. **Enable monitoring**: Add Prometheus, Grafana, or application performance monitoring
 7. **Configure logging driver**: Ship logs to centralized logging system
 
-## 13. Security
+## 14. Security
 
 LightQ implements multiple security layers to protect against common vulnerabilities.
 
@@ -1253,7 +1286,7 @@ Acts as a defense against:
 - **Brute force**: Limits login attempt rate (HTTP 401 responses)
 - **Resource exhaustion**: Protects thread pool and database from overload
 
-See [Section 8: Rate Limiting](#8-rate-limiting) for configuration details.
+See [Section 9: Rate Limiting](#9-rate-limiting) for configuration details.
 
 ### Dependency Security
 
@@ -1298,7 +1331,7 @@ mvn versions:use-latest-releases
 - [ ] Penetration testing (annual or after major changes)
 - [ ] Monitor for suspicious activity (unusual rate limit hits, failed auth)
 
-## 14. Performance Considerations
+## 15. Performance Considerations
 
 ### Throughput Estimates
 
@@ -1415,7 +1448,7 @@ Multiple LightQ instances with shared infrastructure:
 - **Application Performance Monitoring**: New Relic, Datadog, Dynatrace
 - **Log Analytics**: ELK Stack, Splunk
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -1665,7 +1698,7 @@ docker compose exec lightq-service nc -zv redis 6379
 docker compose exec lightq-service nc -zv mongodb 27017
 ```
 
-## 16. Contributing
+## 17. Contributing
 
 We welcome contributions to LightQ! Here's how you can help improve the project.
 
@@ -1794,7 +1827,7 @@ We welcome contributions to LightQ! Here's how you can help improve the project.
 - Focus on the best solution, not ego
 - Help others learn and grow
 
-## 17. License
+## 18. License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for full details.
 
@@ -1830,7 +1863,7 @@ SOFTWARE.
 - ⚠️ No warranty provided
 - ⚠️ No liability accepted
 
-## 18. Support
+## 19. Support
 
 ### Getting Help
 
@@ -1868,7 +1901,7 @@ Special thanks to:
 
 ---
 
-## 19. Quick Reference Card
+## 20. Quick Reference Card
 
 ### Essential Commands
 
