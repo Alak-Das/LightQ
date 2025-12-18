@@ -864,6 +864,7 @@ src/test/java/com/al/lightq/
 ├── LightQApplicationTest.java          # Context loading
 ├── config/
 │   ├── AsyncConfigTest.java            # Thread pool configuration
+│   ├── CorrelationIdFilterTest.java    # Correlation ID filter behavior
 │   ├── RateLimitingInterceptorTest.java # Rate limiting behavior
 │   ├── RedisConfigTest.java            # Redis template & cache manager
 │   └── SecurityConfigTest.java         # User authentication & roles
@@ -946,6 +947,7 @@ mvn clean package -DskipTests
 - Rate limiting enforcement
 - Redis template serialization
 - Security user details and password encoding
+- Correlation ID filter behavior
 
 ### Test Technologies
 

@@ -25,5 +25,5 @@ public class RateLimitProperties {
      * Maximum number of /queue/pop requests allowed per second.
      */
     @Min(0)
-    private int popPerSecond = 10;
+    private int popPerSecond = 20;
 }
