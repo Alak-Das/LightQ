@@ -13,21 +13,21 @@ import jakarta.validation.constraints.Size;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-import static com.al.lightq.config.CorrelationIdFilter.MDC_REQUEST_ID;
+import static com.al.lightq.util.LightQConstants.*;
 
 /**
  * REST controller for handling message-related operations in the Simple Queue Service.
  * Provides endpoints for pushing, popping, and viewing messages within consumer groups.
  */
 @RestController
-@RequestMapping(LightQConstants.QUEUE_BASE_URL)
+@RequestMapping(QUEUE_BASE_URL)
 public class MessageController {
 
     private static final Logger logger = LoggerFactory.getLogger(MessageController.class);
@@ -51,19 +51,19 @@ public class MessageController {
      * @param content       The content of the message to be pushed.
      * @return A {@link MessageResponse} containing details of the pushed message.
      */
-    @PostMapping(LightQConstants.PUSH_URL)
+    @PostMapping(PUSH_URL)
     public MessageResponse push(
-            @RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER)
-            @Pattern(regexp = "^[a-zA-Z0-9-_]{1,50}$", message = "Invalid consumer group name.")
+            @RequestHeader(CONSUMER_GROUP_HEADER)
+            @Pattern(regexp = "^[a-zA-Z0-9-_]{1,50}$", message = INVALID_CONSUMER_GROUP_MESSAGE)
             String consumerGroup,
 
-            @NotBlank(message = "Message content cannot be empty")
-            @Size(max = 1048576, message = "Message size cannot exceed 1MB")
+            @NotBlank(message = EMPTY_MESSAGE_CONTENT_MESSAGE)
+            @Size(max = 1048576, message = MESSAGE_SIZE_EXCEEDED_MESSAGE)
             @RequestBody String content
     ) {
         int contentLength = content != null ? content.length() : 0;
         logger.debug("Received push request for consumer group: {} with contentLength={} chars", consumerGroup, contentLength);
-        Message message = new Message(MDC.get(MDC_REQUEST_ID), consumerGroup, content);
+        Message message = new Message(UUID.randomUUID().toString(), consumerGroup, content);
         Message pushedMessage = pushMessageService.push(message);
         logger.info("Message with ID {} pushed to consumer group {}", pushedMessage.getId(), consumerGroup);
         return new MessageResponse(pushedMessage);
@@ -76,8 +76,8 @@ public class MessageController {
      * @return A {@link ResponseEntity} containing a {@link MessageResponse} if a message is found,
      * or a not found response if the queue is empty.
      */
-    @GetMapping(LightQConstants.POP_URL)
-    public ResponseEntity<MessageResponse> pop(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup) {
+    @GetMapping(POP_URL)
+    public ResponseEntity<MessageResponse> pop(@RequestHeader(CONSUMER_GROUP_HEADER) String consumerGroup) {
         logger.debug("Received pop request for consumer group: {}", consumerGroup);
         Optional<Message> message = popMessageService.pop(consumerGroup);
         if (message.isPresent()) {
@@ -97,19 +97,19 @@ public class MessageController {
      * @param consumed      Optional header to filter messages by consumption status ("yes" for consumed, "no" for unconsumed).
      * @return A {@link ResponseEntity} containing a list of {@link Message} objects.
      */
-    @GetMapping(LightQConstants.VIEW_URL)
-    public ResponseEntity<?> view(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup,
-                                  @RequestHeader(value = LightQConstants.MESSAGE_COUNT_HEADER, required = false) Integer messageCount,
-                                  @RequestHeader(value = LightQConstants.CONSUMED, required = false) String consumed) {
-        logger.debug("Received view request for consumer group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
-        if (StringUtils.isNotEmpty(consumed) && !consumed.equalsIgnoreCase("yes") && !consumed.equalsIgnoreCase("no")) {
-            logger.warn("Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.", consumed);
+    @GetMapping(VIEW_URL)
+    public ResponseEntity<?> view(@RequestHeader(CONSUMER_GROUP_HEADER) String consumerGroup,
+                                  @RequestHeader(value = MESSAGE_COUNT_HEADER, required = false) Integer messageCount,
+                                  @RequestHeader(value = CONSUMED, required = false) String consumed) {
+        logger.debug("Received view request for consumer group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? NA : consumed);
+        if (StringUtils.isNotEmpty(consumed) && !YES.equalsIgnoreCase(consumed) && !NO.equalsIgnoreCase(consumed)) {
+            logger.warn(INVALID_CONSUMED_FILTER_MESSAGE, consumed);
         }
 
         int limit = (messageCount != null && messageCount > 0) ? Math.min(messageCount, lightQProperties.getMessageAllowedToFetch()) : lightQProperties.getMessageAllowedToFetch();
 
         List<Message> messages = viewMessageService.view(consumerGroup, limit, consumed);
-        logger.info("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(), consumerGroup, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
+        logger.info("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(), consumerGroup, StringUtils.isEmpty(consumed) ? NA : consumed);
         return ResponseEntity.ok(messages);
     }
 }

@@ -20,5 +20,11 @@ public class LightQConstants {
     public static final String MESSAGE_COUNT_HEADER = "messageCount";
     public static final String MESSAGE_COUNT_VALIDATION_ERROR_MESSAGE = "Message Count should be 1 to %s.";
     public static final String CACHE_PREFIX = "consumerGroupMessages:";
-
+    public static final String INVALID_CONSUMER_GROUP_MESSAGE = "Invalid consumer group name.";
+    public static final String EMPTY_MESSAGE_CONTENT_MESSAGE = "Message content cannot be empty";
+    public static final String MESSAGE_SIZE_EXCEEDED_MESSAGE = "Message size cannot exceed 1MB";
+    public static final String INVALID_CONSUMED_FILTER_MESSAGE = "Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.";
+    public static final String NA = "N/A";
+    public static final String YES = "yes";
+    public static final String NO = "no";
 }
