@@ -184,7 +184,7 @@ graph TB
 Each consumer group gets its own MongoDB collection:
 - Collection name = `consumerGroup` value
 - Enables efficient queries and independent TTL management
-- TTL index created on first write: `createdAt` field, expires after `lightq.persistence-duration-minutes` (default 30)
+- TTL index created on first write: `createdAt` field, expires after `lightq.persistence-duration-minutes` (default: 1440)
 
 ## 4. Project Structure
 
@@ -227,9 +227,9 @@ src/main/java/com/al/lightq/
 | **Language** | Java | 21 | LTS release with virtual threads support |
 | **Web** | spring-boot-starter-web | 3.3.5 | Embedded Tomcat, REST controllers |
 | **Monitoring** | Spring Boot Actuator | 3.3.5 | Health checks and application monitoring |
-| **Cache** | Redis | 7.2+ | High-speed in-memory data structure store |
+| **Cache** | Redis | 7.2-alpine | High-speed in-memory data structure store |
 | **Cache Client** | Spring Data Redis | 3.3.5 | Redis integration with template abstraction |
-| **Database** | MongoDB | 7.0+ | Document-oriented NoSQL database |
+| **Database** | MongoDB | 7.0 | Document-oriented NoSQL database |
 | **DB Client** | Spring Data MongoDB | 3.3.5 | MongoDB integration with template and repositories |
 | **Security** | spring-boot-starter-security | 3.3.5 | HTTP Basic Auth with BCrypt password encoding |
 | **Async** | ThreadPoolTaskExecutor | 3.3.5 | Asynchronous task execution with thread pool |
@@ -362,11 +362,11 @@ All configuration can be overridden via environment variables for containerized 
 | `SECURITY_ADMIN_PASSWORD` | `adminpassword` | Basic auth password for ADMIN role |
 | **Rate Limiting** |
 | `RATE_LIMIT_PUSH_PER_SECOND` | `10` | Max push requests/second (0 or negative disables) |
-| `RATE_LIMIT_POP_PER_SECOND` | `10` | Max pop requests/second (0 or negative disables) |
+| `RATE_LIMIT_POP_PER_SECOND` | `20` | Max pop requests/second (0 or negative disables) |
 | **LightQ** |
 | `LIGHTQ_MESSAGE_ALLOWED_TO_FETCH` | `50` | Maximum messages returned by /queue/view |
-| `LIGHTQ_PERSISTENCE_DURATION_MINUTES` | `30` | TTL for messages in MongoDB (in minutes) |
-| `LIGHTQ_CACHE_TTL_MINUTES` | `5` | TTL for Redis cache entries (in minutes) |
+| `LIGHTQ_PERSISTENCE_DURATION_MINUTES` | `1440` | TTL for messages in MongoDB (in minutes) |
+| `LIGHTQ_CACHE_TTL_MINUTES` | `30` | TTL for Redis cache entries (in minutes) |
 | **Server** |
 | `SERVER_PORT` | `8080` | HTTP server port |
 | `LOGGING_LEVEL_ROOT` | `INFO` | Root logging level (DEBUG, INFO, WARN, ERROR) |
@@ -397,7 +397,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
 - **Data Structure**: Redis List
     - `LPUSH` for push operations (add to left)
     - `RPOP` for pop operations (remove from right, FIFO)
-- **TTL**: Configurable via `lightq.cache-ttl-minutes` (default 5 minutes)
+- **TTL**: Configurable via `lightq.cache-ttl-minutes` (default 30 minutes)
 - **Serialization**: GenericJackson2JsonRedisSerializer for Message objects
 
 ### MongoDB Configuration
@@ -407,7 +407,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
     - Example: `consumerGroup: orders` → Collection: `orders`
 - **TTL Index**: Automatically created on first write to each collection
     - Field: `createdAt`
-    - Expiration: Configurable via `lightq.persistence-duration-minutes` (default 30)
+    - Expiration: Configurable via `lightq.persistence-duration-minutes` (default 1440)
     - Background cleanup by MongoDB
 - **Authentication**: Supports username/password via `MONGO_URI`
     - Example: `mongodb://user:pass@host:port/?authSource=admin`
@@ -430,7 +430,7 @@ Set limits in `application.properties` or via environment variables:
 ```properties
 # 0 or negative value disables rate limiting for that endpoint
 rate.limit.push-per-second=10
-rate.limit.pop-per-second=10
+rate.limit.pop-per-second=20
 ```
 
 ### Example Behavior
