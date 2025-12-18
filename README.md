@@ -20,16 +20,17 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
 8. [Configuration](#8-configuration)
 9. [Rate Limiting](#9-rate-limiting)
 10. [API Documentation](#10-api-documentation)
-11. [Logging & Observability](#11-logging--observability)
-12. [Testing](#12-testing)
-13. [Docker Deployment](#13-docker-deployment)
-14. [Security](#14-security)
-15. [Performance Considerations](#15-performance-considerations)
-16. [Troubleshooting](#16-troubleshooting)
-17. [Contributing](#17-contributing)
-18. [License](#18-license)
-19. [Support](#19-support)
-20. [Quick Reference Card](#20-quick-reference-card)
+11. [Health Check](#11-health-check)
+12. [Logging & Observability](#12-logging--observability)
+13. [Testing](#13-testing)
+14. [Docker Deployment](#14-docker-deployment)
+15. [Security](#15-security)
+16. [Performance Considerations](#16-performance-considerations)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Contributing](#18-contributing)
+19. [License](#19-license)
+20. [Support](#20-support)
+21. [Quick Reference Card](#21-quick-reference-card)
 
 ## 1. Project Overview
 
@@ -169,13 +170,13 @@ graph TB
 3. Returns `MessageResponse` or HTTP 404
 
 #### View Flow (Admin Only)
-1. Admin requests `/queue/view` with `messageCount` and optional `consumed` header
+1. Admin requests `/queue/view` with an optional `consumed` header
 2. `ViewMessageService`:
     - If `consumed=yes`: Query MongoDB only for consumed messages
     - If `consumed=no` or null:
         - Fetch from Redis cache (unconsumed messages)
         - If count not met, query MongoDB excluding cached IDs
-        - Merge results, sort by `createdAt`, limit to `messageCount`
+        - Merge results, sort by `createdAt`, limit to `lightq.message-allowed-to-fetch`
 3. Returns list of `Message` objects
 
 ### Collection Strategy
@@ -183,7 +184,7 @@ graph TB
 Each consumer group gets its own MongoDB collection:
 - Collection name = `consumerGroup` value
 - Enables efficient queries and independent TTL management
-- TTL index created on first write: `createdAt` field, expires after 30 minutes (default)
+- TTL index created on first write: `createdAt` field, expires after `lightq.persistence-duration-minutes` (default 30)
 
 ## 4. Project Structure
 
@@ -193,6 +194,7 @@ src/main/java/com/al/lightq/
 ├── config/                         # Spring configuration classes
 │   ├── AsyncConfig.java            # Configuration for asynchronous processing
 │   ├── CorrelationIdFilter.java    # Filter for adding correlation IDs to requests
+│   ├── LightQProperties.java       # Type-safe configuration properties
 │   ├── RateLimitProperties.java    # Properties for rate limiting
 │   ├── RateLimitingInterceptor.java # Interceptor for rate limiting
 │   ├── RedisConfig.java            # Configuration for Redis
@@ -224,6 +226,7 @@ src/main/java/com/al/lightq/
 | **Framework** | Spring Boot | 3.3.4 | Application framework with auto-configuration |
 | **Language** | Java | 21 | LTS release with virtual threads support |
 | **Web** | spring-boot-starter-web | 3.3.4 | Embedded Tomcat, REST controllers |
+| **Monitoring** | Spring Boot Actuator | 3.3.4 | Health checks and application monitoring |
 | **Cache** | Redis | 7.2+ | High-speed in-memory data structure store |
 | **Cache Client** | Spring Data Redis | 3.3.4 | Redis integration with template abstraction |
 | **Database** | MongoDB | 7.0+ | Document-oriented NoSQL database |
@@ -348,12 +351,10 @@ All configuration can be overridden via environment variables for containerized 
 | **MongoDB** |
 | `MONGO_URI` | `mongodb://admin:password@localhost:27017` | Full MongoDB connection string with auth |
 | `MONGO_DB` | `lightq-db` | Database name for message storage |
-| `persistence.duration.minutes` | `30` | TTL for messages in MongoDB (in minutes) |
 | **Redis** |
 | `SPRING_DATA_REDIS_HOST` | `localhost` | Redis server hostname |
 | `SPRING_DATA_REDIS_PORT` | `6379` | Redis server port |
 | `SPRING_DATA_REDIS_PASSWORD` | (empty) | Redis password (if authentication enabled) |
-| `cache.ttl.minutes` | `5` | TTL for Redis cache entries (in minutes) |
 | **Security** |
 | `SECURITY_USER_USERNAME` | `user` | Basic auth username for USER role |
 | `SECURITY_USER_PASSWORD` | `password` | Basic auth password for USER role |
@@ -362,11 +363,16 @@ All configuration can be overridden via environment variables for containerized 
 | **Rate Limiting** |
 | `RATE_LIMIT_PUSH_PER_SECOND` | `10` | Max push requests/second (0 or negative disables) |
 | `RATE_LIMIT_POP_PER_SECOND` | `10` | Max pop requests/second (0 or negative disables) |
-| **Business Logic** |
-| `no.of.message.allowed.to.fetch` | `50` | Maximum messages returned by /queue/view |
+| **LightQ** |
+| `LIGHTQ_MESSAGE_ALLOWED_TO_FETCH` | `50` | Maximum messages returned by /queue/view |
+| `LIGHTQ_PERSISTENCE_DURATION_MINUTES` | `30` | TTL for messages in MongoDB (in minutes) |
+| `LIGHTQ_CACHE_TTL_MINUTES` | `5` | TTL for Redis cache entries (in minutes) |
 | **Server** |
-| `server.port` | `8080` | HTTP server port |
-| `logging.level.root` | `INFO` | Root logging level (DEBUG, INFO, WARN, ERROR) |
+| `SERVER_PORT` | `8080` | HTTP server port |
+| `LOGGING_LEVEL_ROOT` | `INFO` | Root logging level (DEBUG, INFO, WARN, ERROR) |
+| **Actuator** |
+| `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health` | Exposes the health endpoint |
+| `MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS` | `always` | Shows details in the health endpoint |
 
 ### Thread Pool Configuration
 
@@ -391,7 +397,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
 - **Data Structure**: Redis List
     - `LPUSH` for push operations (add to left)
     - `RPOP` for pop operations (remove from right, FIFO)
-- **TTL**: Configurable via `cache.ttl.minutes` (default 5 minutes)
+- **TTL**: Configurable via `lightq.cache-ttl-minutes` (default 5 minutes)
 - **Serialization**: GenericJackson2JsonRedisSerializer for Message objects
 
 ### MongoDB Configuration
@@ -401,7 +407,7 @@ public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
     - Example: `consumerGroup: orders` → Collection: `orders`
 - **TTL Index**: Automatically created on first write to each collection
     - Field: `createdAt`
-    - Expiration: Configurable via `persistence.duration.minutes` (default 30)
+    - Expiration: Configurable via `lightq.persistence-duration-minutes` (default 30)
     - Background cleanup by MongoDB
 - **Authentication**: Supports username/password via `MONGO_URI`
     - Example: `mongodb://user:pass@host:port/?authSource=admin`
@@ -479,7 +485,7 @@ All endpoints require HTTP Basic Authentication.
 | Header | Required | Values | Description |
 |--------|----------|--------|-------------|
 | `consumerGroup` | Yes (all endpoints) | alphanumeric, hyphens, underscores (1-50 chars) | Identifies the message queue/group |
-| `messageCount` | Yes (view only) | 1 to 50 (configurable) | Number of messages to retrieve |
+| `messageCount` | No (view only) | 1 to 50 (configurable) | Number of messages to retrieve. Defaults to `lightq.message-allowed-to-fetch` if not provided. |
 | `consumed` | No (view only) | `yes`, `no` | Filter by consumption status |
 | `Content-Type` | Yes (push only) | `text/plain`, `application/json`, etc. | Message content type |
 
@@ -600,20 +606,18 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
   -H "messageCount: 10" \
   -H "consumed: no"
 
-# View all messages (consumed and unconsumed)
+# View all messages (consumed and unconsumed) up to the configured limit
 curl -u admin:adminpassword "http://localhost:8080/queue/view" \
-  -H "consumerGroup: my-group" \
-  -H "messageCount: 50"
+  -H "consumerGroup: my-group"
 
 # View only consumed messages
 curl -u admin:adminpassword "http://localhost:8080/queue/view" \
   -H "consumerGroup: my-group" \
-  -H "messageCount: 20" \
   -H "consumed: yes"
 ```
 
 **Query Semantics**
-- `messageCount`: Integer between 1 and `no.of.message.allowed.to.fetch` (default 50)
+- `messageCount` (optional): The maximum number of messages to retrieve. If not provided, the default is used. The value is capped at the server-side configuration `lightq.message-allowed-to-fetch`.
 - `consumed` (optional):
     - `"yes"`: Return only consumed messages
     - `"no"`: Return only unconsumed messages
@@ -640,7 +644,7 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
 ```
 
 **Error Responses**
-- `400 Bad Request`: Invalid `messageCount` or `consumed` value
+- `400 Bad Request`: Invalid `consumed` value
 - `401 Unauthorized`: Missing or invalid credentials
 - `403 Forbidden`: Insufficient permissions (USER role cannot access)
 
@@ -660,7 +664,7 @@ All errors follow a consistent JSON structure:
   "timestamp": "2025-01-01T10:30:00",
   "status": 400,
   "error": "Bad Request",
-  "message": "Message Count should be 1 to 50.",
+  "message": "Invalid input",
   "path": "/queue/view",
   "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
@@ -687,7 +691,51 @@ All errors follow a consistent JSON structure:
 - Machine-readable API specification
 - Import into Postman, Insomnia, or other API clients
 
-## 11. Logging & Observability
+## 11. Health Check
+
+LightQ includes a health check endpoint provided by Spring Boot Actuator. This endpoint can be used to monitor the application's health and the status of its dependencies.
+
+### Endpoint
+```
+GET /actuator/health
+```
+
+### Response
+The health check endpoint returns a JSON response with the status of the application and its dependencies.
+
+**Example Response**
+```json
+{
+  "status": "UP",
+  "components": {
+    "db": {
+      "status": "UP",
+      "details": {
+        "database": "lightq-db"
+      }
+    },
+    "diskSpace": {
+      "status": "UP",
+      "details": {
+        "total": 107374182400,
+        "free": 53687091200,
+        "threshold": 10485760
+      }
+    },
+    "ping": {
+      "status": "UP"
+    },
+    "redis": {
+      "status": "UP",
+      "details": {
+        "version": "7.2.4"
+      }
+    }
+  }
+}
+```
+
+## 12. Logging & Observability
 
 LightQ implements structured logging with correlation tracking for production-grade observability.
 
@@ -805,7 +853,7 @@ INFO  [main] c.a.l.c.StartupLogger - Startup configuration: mongo database=light
 4. **Correlation Tracking**: Use `requestId` to trace requests across services
 5. **Alerting**: Set up alerts on ERROR level logs and rate limit warnings
 
-## 12. Testing
+## 13. Testing
 
 LightQ includes comprehensive unit and integration tests with **60+ test cases** covering all service layers, controllers, and configurations.
 
@@ -955,7 +1003,7 @@ class MessageControllerTest {
 }
 ```
 
-## 13. Docker Deployment
+## 14. Docker Deployment
 
 LightQ provides production-ready containerization with multi-stage builds and Docker Compose orchestration.
 
@@ -1178,7 +1226,7 @@ lightq-service:
 6. **Enable monitoring**: Add Prometheus, Grafana, or application performance monitoring
 7. **Configure logging driver**: Ship logs to centralized logging system
 
-## 14. Security
+## 15. Security
 
 LightQ implements multiple security layers to protect against common vulnerabilities.
 
@@ -1331,7 +1379,7 @@ mvn versions:use-latest-releases
 - [ ] Penetration testing (annual or after major changes)
 - [ ] Monitor for suspicious activity (unusual rate limit hits, failed auth)
 
-## 15. Performance Considerations
+## 16. Performance Considerations
 
 ### Throughput Estimates
 
@@ -1339,7 +1387,7 @@ mvn versions:use-latest-releases
 - **Push**: 1,000-2,000 msg/sec (cached write + async DB)
 - **Pop (cache hit)**: 2,000-5,000 msg/sec (Redis read + async DB update)
 - **Pop (cache miss)**: 500-1,000 msg/sec (MongoDB query + update)
-- **View**: 100-500 requests/sec (depends on `messageCount` and filtering)
+- **View**: 100-500 requests/sec (depends on `lightq.message-allowed-to-fetch` and filtering)
 
 **Bottlenecks**:
 1. MongoDB write throughput (async executor queue capacity)
@@ -1350,7 +1398,7 @@ mvn versions:use-latest-releases
 
 #### 1. Redis Caching
 - **Benefit**: 10-100x faster reads than MongoDB
-- **Tuning**: Increase `cache.ttl.minutes` for longer cache retention
+- **Tuning**: Increase `lightq.cache-ttl-minutes` for longer cache retention
 - **Monitoring**: Track cache hit rate via logs or metrics
 
 #### 2. Async Thread Pool
@@ -1448,7 +1496,7 @@ Multiple LightQ instances with shared infrastructure:
 - **Application Performance Monitoring**: New Relic, Datadog, Dynatrace
 - **Log Analytics**: ELK Stack, Splunk
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -1502,7 +1550,7 @@ mongosh "mongodb://admin:password@localhost:27017/lightq-db?authSource=admin"
 ```
 
 **Solutions**:
-- Verify `persistence.duration.minutes` is set appropriately
+- Verify `lightq.persistence-duration-minutes` is set appropriately
 - Check MongoDB disk space: `df -h`
 - Ensure async thread pool isn't saturated (check logs for rejected tasks)
 - Verify MongoDB user has write permissions
@@ -1527,7 +1575,7 @@ mongosh
 ```
 
 **Solutions**:
-- **Low cache hit rate**: Increase `cache.ttl.minutes`
+- **Low cache hit rate**: Increase `lightq.cache-ttl-minutes`
 - **High DB load**: Add index on `consumed` field:
   ```javascript
   db.your_consumer_group.createIndex({ consumed: 1, createdAt: 1 })
@@ -1698,7 +1746,7 @@ docker compose exec lightq-service nc -zv redis 6379
 docker compose exec lightq-service nc -zv mongodb 27017
 ```
 
-## 17. Contributing
+## 18. Contributing
 
 We welcome contributions to LightQ! Here's how you can help improve the project.
 
@@ -1827,7 +1875,7 @@ We welcome contributions to LightQ! Here's how you can help improve the project.
 - Focus on the best solution, not ego
 - Help others learn and grow
 
-## 18. License
+## 19. License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for full details.
 
@@ -1863,7 +1911,7 @@ SOFTWARE.
 - ⚠️ No warranty provided
 - ⚠️ No liability accepted
 
-## 19. Support
+## 20. Support
 
 ### Getting Help
 
@@ -1901,7 +1949,7 @@ Special thanks to:
 
 ---
 
-## 20. Quick Reference Card
+## 21. Quick Reference Card
 
 ### Essential Commands
 
@@ -1924,7 +1972,7 @@ curl -u user:password "http://localhost:8080/queue/pop" \
   -H "consumerGroup: test"
 
 curl -u admin:adminpassword "http://localhost:8080/queue/view" \
-  -H "consumerGroup: test" -H "messageCount: 10"
+  -H "consumerGroup: test"
 ```
 
 ### Default Configuration
@@ -1936,11 +1984,11 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
 | ADMIN credentials | admin:adminpassword |
 | Redis host | localhost:6379 |
 | MongoDB URI | mongodb://admin:password@localhost:27017 |
-| Cache TTL | 5 minutes |
-| Persistence TTL | 30 minutes |
-| Rate limit (push) | 10/second |
-| Rate limit (pop) | 10/second |
-| Max view messages | 50 |
+| `lightq.cache-ttl-minutes` | 5 |
+| `lightq.persistence-duration-minutes` | 30 |
+| `rate.limit.push-per-second` | 10 |
+| `rate.limit.pop-per-second` | 10 |
+| `lightq.message-allowed-to-fetch` | 50 |
 
 ### Architecture at a Glance
 

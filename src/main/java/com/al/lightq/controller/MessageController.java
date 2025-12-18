@@ -1,6 +1,6 @@
 package com.al.lightq.controller;
 
-import com.al.lightq.exception.ErrorResponse;
+import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import com.al.lightq.model.MessageResponse;
 import com.al.lightq.service.PopMessageService;
@@ -33,11 +33,13 @@ public class MessageController {
     private final PushMessageService pushMessageService;
     private final PopMessageService popMessageService;
     private final ViewMessageService viewMessageService;
+    private final LightQProperties lightQProperties;
 
-    public MessageController(PushMessageService pushMessageService, PopMessageService popMessageService, ViewMessageService viewMessageService) {
+    public MessageController(PushMessageService pushMessageService, PopMessageService popMessageService, ViewMessageService viewMessageService, LightQProperties lightQProperties) {
         this.pushMessageService = pushMessageService;
         this.popMessageService = popMessageService;
         this.viewMessageService = viewMessageService;
+        this.lightQProperties = lightQProperties;
     }
 
     /**
@@ -90,18 +92,22 @@ public class MessageController {
      * Views messages in the queue for a specific consumer group, with optional filtering by consumption status.
      *
      * @param consumerGroup The header indicating the consumer group to view messages from.
+     * @param messageCount  The maximum number of messages to retrieve.
      * @param consumed      Optional header to filter messages by consumption status ("yes" for consumed, "no" for unconsumed).
      * @return A {@link ResponseEntity} containing a list of {@link Message} objects.
      */
     @GetMapping(LightQConstants.VIEW_URL)
     public ResponseEntity<?> view(@RequestHeader(LightQConstants.CONSUMER_GROUP_HEADER) String consumerGroup,
+                                  @RequestHeader(value = LightQConstants.MESSAGE_COUNT_HEADER, required = false) Integer messageCount,
                                   @RequestHeader(value = LightQConstants.CONSUMED, required = false) String consumed) {
-        logger.debug("Received view request for consumer group: {}, consumed status: {}", consumerGroup, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
+        logger.debug("Received view request for consumer group: {}, message count: {}, consumed status: {}", consumerGroup, messageCount, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
         if (StringUtils.isNotEmpty(consumed) && !consumed.equalsIgnoreCase("yes") && !consumed.equalsIgnoreCase("no")) {
             logger.warn("Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.", consumed);
         }
 
-        List<Message> messages = viewMessageService.view(consumerGroup, consumed);
+        int limit = (messageCount != null && messageCount > 0) ? Math.min(messageCount, lightQProperties.getMessageAllowedToFetch()) : lightQProperties.getMessageAllowedToFetch();
+
+        List<Message> messages = viewMessageService.view(consumerGroup, limit, consumed);
         logger.info("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(), consumerGroup, StringUtils.isEmpty(consumed) ? "N/A" : consumed);
         return ResponseEntity.ok(messages);
     }

@@ -28,12 +28,10 @@ public class ViewMessageService {
     private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
     private final MongoTemplate mongoTemplate;
     private final CacheService cacheService;
-    private final LightQProperties lightQProperties;
 
-    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
+    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
         this.mongoTemplate = mongoTemplate;
         this.cacheService = cacheService;
-        this.lightQProperties = lightQProperties;
     }
 
     /**
@@ -41,11 +39,11 @@ public class ViewMessageService {
      * Messages are first retrieved from the cache and then from MongoDB, excluding duplicates.
      *
      * @param consumerGroup The consumer group for which to retrieve messages.
+     * @param limit The maximum number of messages to return.
      * @param consumed      An optional string ("yes" or "no") to filter messages by their consumed status.
      * @return A sorted list of unique messages.
      */
-    public List<Message> view(String consumerGroup, String consumed) {
-        final int limit = lightQProperties.getMessageAllowedToFetch();
+    public List<Message> view(String consumerGroup, int limit, String consumed) {
         final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
         final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf("yes".equalsIgnoreCase(consumed)) : null;
         logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : "N/A");
