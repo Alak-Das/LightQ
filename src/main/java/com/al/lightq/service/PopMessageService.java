@@ -18,7 +18,7 @@ import java.util.concurrent.Executor;
 import static com.al.lightq.util.LightQConstants.*;
 
 /**
- * Service for popping messages from the queue, prioritizing cache and then falling back to the database.
+ * Service for popping messages, prioritizing cache and then falling back to the database.
  * Messages popped from the cache are asynchronously marked as consumed in the database.
  */
 @Service
@@ -45,7 +45,7 @@ public class PopMessageService {
      * @return An {@link Optional} containing the message if found, or empty if no message is available.
      */
     public Optional<Message> pop(String consumerGroup) {
-        logger.debug("Attempting to pop oldest message from the queue for Consumer Group: {}", consumerGroup);
+        logger.debug("Attempting to pop oldest message for Consumer Group: {}", consumerGroup);
         // Get from Cache
         Message cachedMessage = cacheService.popMessage(consumerGroup);
         if (cachedMessage != null) {

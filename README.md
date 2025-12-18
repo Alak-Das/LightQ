@@ -544,7 +544,7 @@ curl -u user:password -X POST "http://localhost:8080/queue/push" \
 
 #### 2. Pop Message
 
-Retrieve and consume the oldest message from the queue.
+Retrieve and consume the oldest message.
 
 **Request**
 ```http
@@ -587,7 +587,7 @@ curl -u user:password "http://localhost:8080/queue/pop" \
 
 #### 3. View Messages (Admin Only)
 
-Retrieve messages from the queue without consuming them.
+Retrieve messages without consuming them.
 
 **Request**
 ```http

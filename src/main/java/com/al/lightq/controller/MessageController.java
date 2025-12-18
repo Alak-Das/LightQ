@@ -69,7 +69,7 @@ public class MessageController {
     }
 
     /**
-     * Pops the oldest available message from the queue for a specific consumer group.
+     * Pops the oldest available message for a specific consumer group.
      *
      * @param consumerGroup The header indicating the consumer group from which to pop the message.
      * @return A {@link ResponseEntity} containing a {@link MessageResponse} if a message is found,
