@@ -13,12 +13,14 @@ import jakarta.validation.constraints.Size;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
+import static com.al.lightq.config.CorrelationIdFilter.MDC_REQUEST_ID;
 
 /**
  * REST controller for handling message-related operations in the Simple Queue Service.
@@ -61,8 +63,7 @@ public class MessageController {
     ) {
         int contentLength = content != null ? content.length() : 0;
         logger.debug("Received push request for consumer group: {} with contentLength={} chars", consumerGroup, contentLength);
-        String messageId = UUID.randomUUID().toString();
-        Message message = new Message(messageId, consumerGroup, content);
+        Message message = new Message(MDC.get(MDC_REQUEST_ID), consumerGroup, content);
         Message pushedMessage = pushMessageService.push(message);
         logger.info("Message with ID {} pushed to consumer group {}", pushedMessage.getId(), consumerGroup);
         return new MessageResponse(pushedMessage);
