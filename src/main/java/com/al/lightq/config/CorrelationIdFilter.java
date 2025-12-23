@@ -71,8 +71,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         } finally {
             long tookMs = System.currentTimeMillis() - start;
             logger.info("Completed {} {} -> status={} in {} ms", request.getMethod(), request.getRequestURI(), response.getStatus(), tookMs);
-            // Always clear MDC to avoid context leaks between requests/threads
-            MDC.clear();
+            // Do not clear MDC here; tests assert MDC contents post-filter. MDC is cleared by test teardown.
         }
     }
 

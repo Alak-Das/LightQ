@@ -1,8 +1,5 @@
 package com.al.lightq.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import jakarta.validation.constraints.NotBlank;
@@ -16,9 +13,6 @@ import java.util.Objects;
  * This class is used to store the message content, consumer group, and other metadata.
  * </p>
  */
-@Getter
-@NoArgsConstructor
-@AllArgsConstructor
 @Document(collection = "messages-queue")
 public class Message implements Serializable {
 
@@ -30,6 +24,38 @@ public class Message implements Serializable {
     private String consumerGroup;
     private Date createdAt;
     private boolean consumed; // This flag is updated, so it cannot be final in this context
+
+    // Explicit constructors and getters (replacing Lombok)
+    public Message() {
+    }
+
+    public Message(String id, String content, String consumerGroup, Date createdAt, boolean consumed) {
+        this.id = id;
+        this.content = content;
+        this.consumerGroup = consumerGroup;
+        this.createdAt = createdAt;
+        this.consumed = consumed;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public String getConsumerGroup() {
+        return consumerGroup;
+    }
+
+    public Date getCreatedAt() {
+        return createdAt;
+    }
+
+    public boolean isConsumed() {
+        return consumed;
+    }
 
     /**
      * Constructor for new messages.

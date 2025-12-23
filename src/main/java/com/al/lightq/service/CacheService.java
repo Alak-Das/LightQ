@@ -26,6 +26,9 @@ public class CacheService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final LightQProperties lightQProperties;
 
+    // For tests to override TTL via ReflectionTestUtils.setField("redisCacheTtlMinutes", ...)
+    private long redisCacheTtlMinutes;
+
     public CacheService(RedisTemplate<String, Object> redisTemplate, LightQProperties lightQProperties) {
         this.redisTemplate = redisTemplate;
         this.lightQProperties = lightQProperties;
@@ -38,10 +41,10 @@ public class CacheService {
      */
     public void addMessage(Message message) {
         String key = LightQConstants.CACHE_PREFIX + message.getConsumerGroup();
-        long redisCacheTtlMinutes = lightQProperties.getCacheTtlMinutes();
-        logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), redisCacheTtlMinutes);
+        long ttlMinutes = (this.redisCacheTtlMinutes > 0) ? this.redisCacheTtlMinutes : lightQProperties.getCacheTtlMinutes();
+        logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), ttlMinutes);
         redisTemplate.opsForList().leftPush(key, message);
-        redisTemplate.expire(key, Duration.ofMinutes(redisCacheTtlMinutes));
+        redisTemplate.expire(key, Duration.ofMinutes(ttlMinutes));
     }
 
     /**

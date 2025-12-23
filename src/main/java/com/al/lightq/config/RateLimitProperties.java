@@ -1,9 +1,9 @@
 package com.al.lightq.config;
 
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.Min;
+import org.springframework.context.annotation.Configuration;
 
 /**
  * Type-safe configuration properties for rate limiting.
@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Min;
  * This class holds all the properties prefixed with {@code rate.limit}.
  * </p>
  */
-@Data
 @Validated
+@Configuration
 @ConfigurationProperties(prefix = "rate.limit")
 public class RateLimitProperties {
     /**
@@ -26,4 +26,24 @@ public class RateLimitProperties {
      */
     @Min(0)
     private int popPerSecond = 20;
+
+    // Explicit constructor, getters and setters (replacing Lombok @Data)
+    public RateLimitProperties() {
+    }
+
+    public int getPushPerSecond() {
+        return pushPerSecond;
+    }
+
+    public void setPushPerSecond(int pushPerSecond) {
+        this.pushPerSecond = pushPerSecond;
+    }
+
+    public int getPopPerSecond() {
+        return popPerSecond;
+    }
+
+    public void setPopPerSecond(int popPerSecond) {
+        this.popPerSecond = popPerSecond;
+    }
 }

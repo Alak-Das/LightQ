@@ -1,7 +1,5 @@
 package com.al.lightq.model;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -12,12 +10,25 @@ import java.time.ZoneId;
  * This class is used to create a consistent response format for messages.
  * </p>
  */
-@Data
-@NoArgsConstructor
 public class MessageResponse {
     private String id;
     private String content;
     private LocalDateTime createdAt;
+
+    public MessageResponse() {
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 
     public MessageResponse(Message message) {
         this.id = message.getId();

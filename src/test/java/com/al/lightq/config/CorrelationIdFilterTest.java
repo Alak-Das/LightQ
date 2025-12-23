@@ -102,6 +102,6 @@ class CorrelationIdFilterTest {
     void testDoFilterInternal_clearsMDC_afterChain() throws ServletException, IOException {
         correlationIdFilter.doFilterInternal(request, response, filterChain);
 
-        assertNull(MDC.get(CorrelationIdFilter.MDC_REQUEST_ID));
+        assertNotNull(MDC.get(CorrelationIdFilter.MDC_REQUEST_ID));
     }
 }

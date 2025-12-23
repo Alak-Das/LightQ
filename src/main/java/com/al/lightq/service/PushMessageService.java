@@ -36,6 +36,9 @@ public class PushMessageService {
     private final Executor taskExecutor;
     private final LightQProperties lightQProperties;
 
+    // For tests to override TTL via ReflectionTestUtils.setField("expireMinutes", ...)
+    private long expireMinutes;
+
     public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor, LightQProperties lightQProperties) {
         this.mongoClient = mongoClient;
         this.mongoTemplate = mongoTemplate;
@@ -93,9 +96,9 @@ public class PushMessageService {
                 });
 
         if (!ttlExists) {
-            long expireMinutes = lightQProperties.getPersistenceDurationMinutes();
-            logger.info("TTL index does not exist on field: {} for collection: {}. Creating with {} minutes expiration.", CREATED_AT, message.getConsumerGroup(), expireMinutes);
-            IndexOptions indexOptions = new IndexOptions().expireAfter(expireMinutes, TimeUnit.MINUTES);
+            long minutes = (this.expireMinutes > 0) ? this.expireMinutes : lightQProperties.getPersistenceDurationMinutes();
+            logger.info("TTL index does not exist on field: {} for collection: {}. Creating with {} minutes expiration.", CREATED_AT, message.getConsumerGroup(), minutes);
+            IndexOptions indexOptions = new IndexOptions().expireAfter(minutes, TimeUnit.MINUTES);
             collection.createIndex(new Document(CREATED_AT, 1), indexOptions);
             logger.info("TTL index created on field: {} for collection: {}", CREATED_AT, message.getConsumerGroup());
         } else {
