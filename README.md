@@ -103,8 +103,8 @@ graph TB
     end
 
     subgraph "Data Layer"
-        R[(Redis<br/>In-Memory Lists<br/>TTL: 5min)]
-        M[(MongoDB<br/>Per-Group Collections<br/>TTL: 30min)]
+        R[(Redis<br/>In-Memory Lists<br/>TTL: 30min)]
+        M[(MongoDB<br/>Per-Group Collections<br/>TTL: 1440min)]
     end
 
     P -->|POST /queue/push| F
@@ -775,7 +775,7 @@ X-Correlation-Id: abc123
 ```
 2025-01-01 10:30:00.123 INFO  [http-nio-8080-exec-1] c.a.l.c.CorrelationIdFilter - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Incoming request: POST /queue/push (requestId=a1b2c3d4-e5f6-7890-abcd-ef1234567890)
 2025-01-01 10:30:00.145 DEBUG [http-nio-8080-exec-1] c.a.l.c.MessageController - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Received push request for consumer group: orders with contentLength=25 chars
-2025-01-01 10:30:00.167 DEBUG [http-nio-8080-exec-1] c.a.l.s.CacheService - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Cache add: key=consumerGroupMessages:orders, messageId=msg123, ttlMinutes=5
+2025-01-01 10:30:00.167 DEBUG [http-nio-8080-exec-1] c.a.l.s.CacheService - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Cache add: key=consumerGroupMessages:orders, messageId=msg123, ttlMinutes=30
 2025-01-01 10:30:00.189 INFO  [http-nio-8080-exec-1] c.a.l.c.CorrelationIdFilter - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Completed POST /queue/push -> status=200 in 66 ms
 2025-01-01 10:30:00.201 INFO  [DBDataUpdater-1] c.a.l.s.PushMessageService - rid=a1b2c3d4-e5f6-7890-abcd-ef1234567890 method=POST path=/queue/push cg=orders - Message with ID msg123 asynchronously saved to DB for Consumer Group: orders
 ```
@@ -837,10 +837,10 @@ curl -X POST http://localhost:8080/actuator/loggers/com.al.lightq \
 
 `StartupLogger` displays configuration at application start:
 ```
-INFO  [main] c.a.l.c.StartupLogger - Startup configuration: rateLimits pushPerSec=10, popPerSec=10
+INFO  [main] c.a.l.c.StartupLogger - Startup configuration: rateLimits pushPerSec=10, popPerSec=20
 INFO  [main] c.a.l.c.StartupLogger - Startup configuration: messageAllowedCount=50
-INFO  [main] c.a.l.c.StartupLogger - Startup configuration: redis host=localhost, port=6379, ttlMinutes=5
-INFO  [main] c.a.l.c.StartupLogger - Startup configuration: mongo database=lightq-db, persistenceTTLMinutes=30
+INFO  [main] c.a.l.c.StartupLogger - Startup configuration: redis host=localhost, port=6379, ttlMinutes=30
+INFO  [main] c.a.l.c.StartupLogger - Startup configuration: mongo database=lightq-db, persistenceTTLMinutes=1440
 ```
 
 **Security Note**: Credentials are NOT logged to prevent exposure.
@@ -1990,10 +1990,10 @@ curl -u admin:adminpassword "http://localhost:8080/queue/view" \
 | ADMIN credentials | admin:adminpassword |
 | Redis host | localhost:6379 |
 | MongoDB URI | mongodb://admin:password@localhost:27017 |
-| `lightq.cache-ttl-minutes` | 5 |
-| `lightq.persistence-duration-minutes` | 30 |
+| `lightq.cache-ttl-minutes` | 30 |
+| `lightq.persistence-duration-minutes` | 1440 |
 | `rate.limit.push-per-second` | 10 |
-| `rate.limit.pop-per-second` | 10 |
+| `rate.limit.pop-per-second` | 20 |
 | `lightq.message-allowed-to-fetch` | 50 |
 
 ### Architecture at a Glance
@@ -2004,7 +2004,7 @@ Client → [Rate Limiter] → [Controller] → [Service Layer]
                               ┌───────────┴──────────┐
                               ↓                      ↓
                         [Redis Cache]         [MongoDB]
-                        (5 min TTL)          (30 min TTL)
+                        (30 min TTL)         (1440 min TTL)
                               ↑                      ↑
                               └──────────┬───────────┘
                                     [Async Pool]
@@ -2017,4 +2017,4 @@ Client → [Rate Limiter] → [Controller] → [Service Layer]
 
 **Repository**: [https://github.com/Alak-Das/LightQ](https://github.com/Alak-Das/LightQ)
 
-**Last Updated**: January 2025
+**Last Updated**: December 2025

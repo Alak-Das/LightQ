@@ -3,20 +3,22 @@ package com.al.lightq.service;
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.IndexOptions;
-import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static com.al.lightq.util.LightQConstants.CREATED_AT;
+import static com.al.lightq.util.LightQConstants.CONSUMED;
 
 /**
  * Service for pushing messages to the queue.
@@ -38,6 +40,9 @@ public class PushMessageService {
 
     // For tests to override TTL via ReflectionTestUtils.setField("expireMinutes", ...)
     private long expireMinutes;
+
+    // Tracks which consumer groups have had indexes ensured to avoid repeated work
+    private final ConcurrentMap<String, Boolean> indexesEnsured = new ConcurrentHashMap<>();
 
     public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService, @Qualifier("taskExecutor") Executor taskExecutor, LightQProperties lightQProperties) {
         this.mongoClient = mongoClient;
@@ -86,23 +91,24 @@ public class PushMessageService {
      * @param message The {@link Message} for which to ensure the TTL index.
      */
     private void createTTLIndex(Message message) {
-        MongoCollection<Document> collection = mongoClient.getDatabase(mongoDB).getCollection(message.getConsumerGroup());
-        boolean ttlExists = collection.listIndexes()
-                .into(new java.util.ArrayList<>())
-                .stream()
-                .anyMatch(index -> {
-                    Document key = (Document) index.get("key");
-                    return key != null && key.containsKey(CREATED_AT);
-                });
-
-        if (!ttlExists) {
+        String collection = message.getConsumerGroup();
+        if (Boolean.TRUE.equals(indexesEnsured.get(collection))) {
+            return;
+        }
+        synchronized (indexesEnsured) {
+            if (Boolean.TRUE.equals(indexesEnsured.get(collection))) {
+                return;
+            }
             long minutes = (this.expireMinutes > 0) ? this.expireMinutes : lightQProperties.getPersistenceDurationMinutes();
-            logger.info("TTL index does not exist on field: {} for collection: {}. Creating with {} minutes expiration.", CREATED_AT, message.getConsumerGroup(), minutes);
-            IndexOptions indexOptions = new IndexOptions().expireAfter(minutes, TimeUnit.MINUTES);
-            collection.createIndex(new Document(CREATED_AT, 1), indexOptions);
-            logger.info("TTL index created on field: {} for collection: {}", CREATED_AT, message.getConsumerGroup());
-        } else {
-            logger.debug("TTL index already exists on field: {} for collection: {}", CREATED_AT, message.getConsumerGroup());
+            logger.debug("Ensuring indexes for collection: {} (TTL on {}, compound on {},{})", collection, CREATED_AT, CONSUMED, CREATED_AT);
+            // TTL index on createdAt
+            mongoTemplate.indexOps(collection)
+                    .ensureIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(minutes, TimeUnit.MINUTES));
+            // Compound index to speed up read path: { consumed: 1, createdAt: 1 }
+            mongoTemplate.indexOps(collection)
+                    .ensureIndex(new Index().on(CONSUMED, Sort.Direction.ASC).on(CREATED_AT, Sort.Direction.ASC));
+            indexesEnsured.put(collection, true);
+            logger.debug("Indexes ensured for collection: {}", collection);
         }
     }
 }
