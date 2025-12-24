@@ -28,7 +28,17 @@
           "// Generate a fresh correlation/request id for every request",
           "const __reqId = pm.variables.replaceIn('{{$randomUUID}}');",
           "try { pm.environment.set('requestId', __reqId); } catch (e) {}",
-          "try { pm.collectionVariables.set('requestId', __reqId); } catch (e) {}"
+          "try { pm.collectionVariables.set('requestId', __reqId); } catch (e) {}",
+          "",
+          "// Ensure baseUrl is set; fallback helps Newman/Runner if interpolation resolves empty",
+          "let __bu = pm.variables.get('baseUrl');",
+          "if (!__bu || !String(__bu).trim()) {",
+          "  __bu = 'http://localhost:8080';",
+          "  try { pm.environment.set('baseUrl', __bu); } catch (e) {}",
+          "  try { pm.collectionVariables.set('baseUrl', __bu); } catch (e) {}",
+          "}",
+          "",
+          "// Normalize request URL removed to avoid Newman 'request url is empty' issue"
         ]
       }
     }
@@ -45,9 +55,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/actuator/health"
-            }
+            "url": "http://localhost:8080/actuator/health"
           },
           "event": [
             {
@@ -87,7 +95,7 @@
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
             "body": { "mode": "raw", "raw": "{{messageContent}}" },
-            "url": { "raw": "{{baseUrl}}/queue/push" }
+            "url": "http://localhost:8080/queue/push"
           },
           "event": [
             {
@@ -115,7 +123,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/pop" }
+            "url": "http://localhost:8080/queue/pop"
           },
           "event": [
             {
@@ -142,9 +150,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/extend-visibility?id={{messageId}}&seconds=30"
-            }
+            "url": "http://localhost:8080/queue/extend-visibility?id={{messageId}}&seconds=30"
           },
           "event": [
             {
@@ -168,9 +174,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/ack?id={{messageId}}"
-            }
+            "url": "http://localhost:8080/queue/ack?id={{messageId}}"
           },
           "event": [
             {
@@ -194,7 +198,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/pop" }
+            "url": "http://localhost:8080/queue/pop"
           },
           "event": [
             {
@@ -220,7 +224,7 @@
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
             "body": { "mode": "raw", "raw": "{{messageContent2}}" },
-            "url": { "raw": "{{baseUrl}}/queue/push" }
+            "url": "http://localhost:8080/queue/push"
           },
           "event": [
             {
@@ -245,7 +249,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/pop" }
+            "url": "http://localhost:8080/queue/pop"
           },
           "event": [
             {
@@ -271,9 +275,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/nack?id={{messageId2}}&reason=test-nack"
-            }
+            "url": "http://localhost:8080/queue/nack?id={{messageId2}}&reason=test-nack"
           },
           "event": [
             {
@@ -297,7 +299,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/pop" }
+            "url": "http://localhost:8080/queue/pop"
           },
           "event": [
             {
@@ -323,9 +325,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/extend-visibility?id={{messageId2}}&seconds=-1"
-            }
+            "url": "http://localhost:8080/queue/extend-visibility?id={{messageId2}}&seconds=-1"
           },
           "event": [
             {
@@ -349,9 +349,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/ack?id=non-existent-id"
-            }
+            "url": "http://localhost:8080/queue/ack?id=non-existent-id"
           },
           "event": [
             {
@@ -375,9 +373,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/queue/nack?id=non-existent-id&reason=na"
-            }
+            "url": "http://localhost:8080/queue/nack?id=non-existent-id&reason=na"
           },
           "event": [
             {
@@ -403,7 +399,7 @@
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
             "body": { "mode": "raw", "raw": "content" },
-            "url": { "raw": "{{baseUrl}}/queue/push" }
+            "url": "http://localhost:8080/queue/push"
           },
           "event": [
             {
@@ -429,7 +425,7 @@
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
             "body": { "mode": "raw", "raw": "" },
-            "url": { "raw": "{{baseUrl}}/queue/push" }
+            "url": "http://localhost:8080/queue/push"
           },
           "event": [
             {
@@ -466,7 +462,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/view" }
+            "url": "http://localhost:8080/queue/view"
           },
           "event": [
             {
@@ -493,7 +489,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/view" }
+            "url": "http://localhost:8080/queue/view"
           },
           "event": [
             {
@@ -519,7 +515,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/view" }
+            "url": "http://localhost:8080/queue/view"
           },
           "event": [
             {
@@ -544,7 +540,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/dlq/view?limit=5" }
+            "url": "http://localhost:8080/queue/dlq/view?limit=5"
           },
           "event": [
             {
@@ -574,7 +570,7 @@
               "mode": "raw",
               "raw": "[]"
             },
-            "url": { "raw": "{{baseUrl}}/queue/dlq/replay" }
+            "url": "http://localhost:8080/queue/dlq/replay"
           },
           "event": [
             {
@@ -609,7 +605,7 @@
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
             "body": { "mode": "raw", "raw": "content" },
-            "url": { "raw": "{{baseUrl}}/queue/push" }
+            "url": "http://localhost:8080/queue/push"
           },
           "event": [
             {
@@ -640,7 +636,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/queue/view" }
+            "url": "http://localhost:8080/queue/view"
           },
           "event": [
             {
@@ -669,7 +665,7 @@
               { "key": "X-Request-Id", "value": "{{requestId}}" },
               { "key": "X-Correlation-Id", "value": "{{requestId}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/actuator/health" }
+            "url": "http://localhost:8080/actuator/health"
           },
           "event": [
             {
