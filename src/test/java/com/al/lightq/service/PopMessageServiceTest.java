@@ -31,7 +31,6 @@ public class PopMessageServiceTest {
 	@Mock
 	private CacheService cacheService;
 
-
 	@InjectMocks
 	private PopMessageService popMessageService;
 

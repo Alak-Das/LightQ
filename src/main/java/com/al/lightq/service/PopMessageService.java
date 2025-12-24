@@ -34,7 +34,8 @@ public class PopMessageService {
 	private final CacheService cacheService;
 	private final LightQProperties lightQProperties;
 
-	public PopMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
+	public PopMessageService(MongoTemplate mongoTemplate, CacheService cacheService,
+			LightQProperties lightQProperties) {
 		this.mongoTemplate = mongoTemplate;
 		this.cacheService = cacheService;
 		this.lightQProperties = lightQProperties;

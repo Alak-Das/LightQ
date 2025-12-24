@@ -108,7 +108,6 @@ public class Message implements Serializable {
 		this(messageId, content, consumerGroup, new Date(), false);
 	}
 
-
 	/**
 	 * {@inheritDoc}
 	 */

@@ -1,10 +1,10 @@
 package com.al.lightq;
 
 /**
- * Constants used throughout the application.
- * Grouped by domain for clarity: roles, headers, API paths, cache keys,
- * message field names, acknowledgement/DLQ fields, DLQ metadata, config values,
- * validation messages, and general literals.
+ * Constants used throughout the application. Grouped by domain for clarity:
+ * roles, headers, API paths, cache keys, message field names,
+ * acknowledgement/DLQ fields, DLQ metadata, config values, validation messages,
+ * and general literals.
  */
 public final class LightQConstants {
 

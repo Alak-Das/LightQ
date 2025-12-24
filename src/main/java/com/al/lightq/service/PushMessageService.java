@@ -6,6 +6,7 @@ import static com.al.lightq.LightQConstants.RESERVED_UNTIL;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,15 +32,14 @@ public class PushMessageService {
 	private final MongoTemplate mongoTemplate;
 	private final CacheService cacheService;
 	private final LightQProperties lightQProperties;
-
+	// Tracks which consumer groups have had indexes ensured to avoid repeated work
+	private final ConcurrentMap<String, Boolean> indexesEnsured = new ConcurrentHashMap<>();
 	// For tests to override TTL via ReflectionTestUtils.setField("expireMinutes",
 	// ...)
 	private long expireMinutes;
 
-	// Tracks which consumer groups have had indexes ensured to avoid repeated work
-	private final ConcurrentMap<String, Boolean> indexesEnsured = new ConcurrentHashMap<>();
-
-	public PushMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
+	public PushMessageService(MongoTemplate mongoTemplate, CacheService cacheService,
+			LightQProperties lightQProperties) {
 		this.mongoTemplate = mongoTemplate;
 		this.cacheService = cacheService;
 		this.lightQProperties = lightQProperties;
@@ -65,19 +66,23 @@ public class PushMessageService {
 		logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
 				message.getConsumerGroup());
 
-		// Persist to DBs
+		// Fire-and-forget MongoDB persistence
+		persistToMongo(message);
+
+		return message;
+	}
+
+	@Async("taskExecutor")
+	public void persistToMongo(Message message) {
 		try {
 			createTTLIndex(message);
 			mongoTemplate.insert(message, message.getConsumerGroup());
-			logger.info("Message with ID {} saved to DB for Consumer Group: {}", message.getId(),
-					message.getConsumerGroup());
+			logger.info("Message with ID {} persisted asynchronously in DB.", message.getId());
+			CompletableFuture.completedFuture(null);
 		} catch (Exception e) {
-			logger.error("Failed to persist message: messageId={}, consumerGroup={}, error={}", message.getId(),
-					message.getConsumerGroup(), e.getMessage(), e);
-			throw e;
+			logger.error("Async persist failed for Message ID: {}", message.getId(), e);
+			CompletableFuture.failedFuture(e);
 		}
-
-		return message;
 	}
 
 	/**

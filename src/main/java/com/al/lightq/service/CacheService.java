@@ -68,7 +68,6 @@ public class CacheService {
 		return popped;
 	}
 
-
 	/**
 	 * Views messages in the cache.
 	 *
