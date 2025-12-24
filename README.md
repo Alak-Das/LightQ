@@ -721,6 +721,18 @@ Artifacts:
 - postman/LightQ.postman_collection.json
 - postman/LightQ.local.postman_environment.json
 
+Environment variables expected by the collection (provided via the environment file or Newman --env-var):
+- baseUrl (required), example: http://localhost:8080
+- consumerGroup (required), example: postman-it
+- userUser, userPass
+- adminUser, adminPass
+- rateLimitPush (optional, used by rate limit demo)
+- messageContent, messageContent2 (sample payloads)
+- requestId, messageId, messageId2 (created/used by tests; can be empty initially)
+
+Notes:
+- The collection no longer defines collection-level defaults. Ensure the selected Postman environment has baseUrl set (Current Value), otherwise requests may fail with "request url is empty". When using Newman, pass -e postman/LightQ.local.postman_environment.json or provide --env-var baseUrl=... etc.
+
 Prerequisites
 - MongoDB and Redis running (docker compose up -d mongodb redis)
 - LightQ app running on http://localhost:8080 (mvn spring-boot:run)
