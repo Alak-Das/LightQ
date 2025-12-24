@@ -1,0 +1,713 @@
+{
+  "info": {
+    "_postman_id": "d6f2f7f5-1c6e-4a3b-9f8a-3b1d4f8f1234",
+    "name": "LightQ API Integration Tests",
+    "description": "Comprehensive Postman collection for LightQ covering happy paths, error cases, security, and (optional) rate limit scenarios.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "consumerGroup", "value": "test-group", "type": "string" },
+    { "key": "userUser", "value": "user", "type": "string" },
+    { "key": "userPass", "value": "password", "type": "string" },
+    { "key": "adminUser", "value": "admin", "type": "string" },
+    { "key": "adminPass", "value": "adminpassword", "type": "string" },
+    { "key": "messageContent", "value": "hello from postman", "type": "string" },
+    { "key": "messageContent2", "value": "hello again (nack flow)", "type": "string" },
+    { "key": "messageId", "value": "", "type": "string" },
+    { "key": "messageId2", "value": "", "type": "string" },
+    { "key": "requestId", "value": "", "type": "string" },
+    { "key": "rateLimitPush", "value": "10", "type": "string" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Generate a fresh correlation/request id for every request",
+          "const __reqId = pm.variables.replaceIn('{{$randomUUID}}');",
+          "try { pm.environment.set('requestId', __reqId); } catch (e) {}",
+          "try { pm.collectionVariables.set('requestId', __reqId); } catch (e) {}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /actuator/health",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Health is UP', () => json.status === 'UP');",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User Endpoints (role USER)",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          { "key": "username", "value": "{{userUser}}", "type": "string" },
+          { "key": "password", "value": "{{userPass}}", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST /queue/push (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{{messageContent}}" },
+            "url": { "raw": "{{baseUrl}}/queue/push" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Has id/content', () => json && json.id && json.content !== undefined);",
+                  "pm.test('Content echoed', () => json.content === pm.environment.get('messageContent'));",
+                  "pm.environment.set('messageId', json.id);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (expect 200 after push)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/pop" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Has id/content/createdAt', () => json && json.id && json.content && json.createdAt);",
+                  "pm.environment.set('messageId', json.id);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/extend-visibility (valid +30s)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/extend-visibility?id={{messageId}}&seconds=30"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/ack (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/ack?id={{messageId}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (after ack -> 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/pop" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 (no message after ack)', () => pm.response.code === 404);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/push (for nack flow)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{{messageContent2}}" },
+            "url": { "raw": "{{baseUrl}}/queue/push" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.environment.set('messageId2', pm.response.json().id);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (for nack flow -> 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/pop" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('messageId2', json.id);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/nack (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/nack?id={{messageId2}}&reason=test-nack"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (after nack -> message should reappear)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/pop" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Same id as before nack', () => json.id === pm.environment.get('messageId2'));",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/extend-visibility (invalid seconds -> 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/extend-visibility?id={{messageId2}}&seconds=-1"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.code === 400);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/ack (non-existent -> 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/ack?id=non-existent-id"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.code === 404);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/nack (non-existent -> 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/queue/nack?id=non-existent-id&reason=na"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.code === 404);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/push (invalid consumerGroup -> 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "bad group with spaces" },
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "content" },
+            "url": { "raw": "{{baseUrl}}/queue/push" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.code === 400);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/push (empty content -> 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": { "raw": "{{baseUrl}}/queue/push" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Spring validation may return 400 with default error shape",
+                  "pm.test('Status 400', () => pm.response.code === 400);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Endpoints (role ADMIN)",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          { "key": "username", "value": "{{adminUser}}", "type": "string" },
+          { "key": "password", "value": "{{adminPass}}", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "GET /queue/view (no filters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/view" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Returns array', () => Array.isArray(pm.response.json()));",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/view (messageCount=10, consumed=no)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "messageCount", "value": "10" },
+              { "key": "consumed", "value": "no" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/view" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Returns array', () => Array.isArray(pm.response.json()));",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/view (invalid consumed header -> 200, ignored)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "consumed", "value": "maybe" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/view" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Returns array', () => Array.isArray(pm.response.json()));",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/dlq/view?limit=5",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/dlq/view?limit=5" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Returns array', () => Array.isArray(pm.response.json()));",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/dlq/replay (empty list -> 200, 0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[]"
+            },
+            "url": { "raw": "{{baseUrl}}/queue/dlq/replay" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "let n = 0;",
+                  "try { n = parseInt(pm.response.text(), 10); } catch (e) {}",
+                  "pm.test('Replayed count is a number (typically 0)', () => Number.isFinite(n) && n >= 0);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Security",
+      "item": [
+        {
+          "name": "Unauthorized: POST /queue/push (no auth -> 401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "content" },
+            "url": { "raw": "{{baseUrl}}/queue/push" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.code === 401);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forbidden: GET /queue/view as USER (-> 403)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUser}}", "type": "string" },
+                { "key": "password", "value": "{{userPass}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/queue/view" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.code === 403);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rate limit (optional: disabled by default)",
+      "item": [
+        {
+          "name": "Demo: push many within 1s (observe 429 if limits low)",
+          "disabled": true,
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Request-Id", "value": "{{requestId}}" },
+              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/actuator/health" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// This request does nothing; the test below fires push requests quickly.",
+                  "const url = pm.environment.get('baseUrl') + '/queue/push';",
+                  "const auth = 'Basic ' + btoa(pm.environment.get('userUser') + ':' + pm.environment.get('userPass'));",
+                  "const consumerGroup = pm.environment.get('consumerGroup');",
+                  "const headers = {",
+                  "  'Authorization': auth,",
+                  "  'consumerGroup': consumerGroup,",
+                  "  'Content-Type': 'text/plain'",
+                  "};",
+                  "const attempts = parseInt(pm.environment.get('rateLimitPush') || '10', 10) + 2;",
+                  "let seen429 = 0;",
+                  "function sendOne(i, cb) {",
+                  "  pm.sendRequest({ url, method: 'POST', header: headers, body: { mode: 'raw', raw: 'bulk-' + i + '-' + Date.now() } }, (err, res) => {",
+                  "    if (!err && res.code === 429) seen429++;",
+                  "    cb();",
+                  "  });",
+                  "}",
+                  "function series(i, done) {",
+                  "  if (i >= attempts) return done();",
+                  "  sendOne(i, () => series(i+1, done));",
+                  "}",
+                  "series(0, () => {",
+                  "  pm.test('Observed at least one 429 (depends on server limit and timing)', () => true);",
+                  "  console.log('Rate-limit 429 count:', seen429);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

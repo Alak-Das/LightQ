@@ -350,6 +350,9 @@ rate.limit.pop-per-second=20
 Base URL: http://localhost:8080/queue
 
 Authentication: HTTP Basic Auth
+OpenAPI:
+- Swagger UI: http://localhost:8080/swagger-ui/index.html (requires Basic Auth)
+- JSON: http://localhost:8080/v3/api-docs
 
 | Role | Username | Password | Permissions |
 |------|----------|----------|-------------|
@@ -629,6 +632,7 @@ Notes:
 
 Common issues:
 - Connection refused (Redis/Mongo): verify services, credentials, networking
+- Postman error 'url is empty': ensure the selected Environment has a non-empty Current Value for baseUrl. In Postman, an empty environment variable overrides the collection variable and resolves {{baseUrl}} to empty. In Runner/Newman, pass the environment file via -e.
 - Slow pop: review cache hit rate, indexes, network latency
 - Excessive redeliveries: increase visibility timeout; fix consumer processing; inspect DLQ
 - Frequent 429: raise limits or scale horizontally
@@ -709,4 +713,101 @@ Defaults
 
 Built with Spring Boot 3.3.5 and Java 21
 Repository: https://github.com/Alak-Das/LightQ
+## 22. Postman/Newman Integration Tests
+
+This repository includes a Postman collection and environment for end-to-end integration tests against a running LightQ instance.
+
+Artifacts:
+- postman/LightQ.postman_collection.json
+- postman/LightQ.local.postman_environment.json
+
+Prerequisites
+- MongoDB and Redis running (docker compose up -d mongodb redis)
+- LightQ app running on http://localhost:8080 (mvn spring-boot:run)
+- Default credentials (can be overridden via env vars):
+  - USER: user/password
+  - ADMIN: admin/adminpassword
+
+Run via Newman (local Node)
+1) Install Newman
+   npm install -g newman
+2) Start infra and app (in separate terminal):
+   docker compose up -d mongodb redis
+   mvn spring-boot:run
+3) Execute tests
+   newman run postman/LightQ.postman_collection.json -e postman/LightQ.local.postman_environment.json --reporters cli,junit --reporter-junit-export target/newman-results.xml
+
+Run via Newman (Docker)
+- macOS/Windows (use host.docker.internal):
+   docker run --rm --network host -v "$PWD/postman":/etc/newman -t postman/newman:alpine \
+     run /etc/newman/LightQ.postman_collection.json \
+     -e /etc/newman/LightQ.local.postman_environment.json \
+     --env-var baseUrl=http://host.docker.internal:8080
+- Linux (Docker host networking reaches localhost):
+   docker run --rm --network host -v "$PWD/postman":/etc/newman -t postman/newman:alpine \
+     run /etc/newman/LightQ.postman_collection.json \
+     -e /etc/newman/LightQ.local.postman_environment.json
+
+Notes
+- Correlation IDs: a pre-request script generates and sends X-Request-Id/X-Correlation-Id; echoed by the server.
+- Security: collection folders use Basic Auth; environment variables control credentials.
+- Rate limit scenario is provided but disabled by default; to demo 429s:
+  1) Lower RATE_LIMIT_PUSH_PER_SECOND (e.g., 2) and restart the app
+  2) Enable the "Rate limit" item in the collection (uncheck "disabled")
+- DLQ tests are non-destructive; replay test uses an empty list; adjust as needed for your environment.
+
+Optional CI (GitHub Actions example)
+Add a workflow (snippet) to run Newman in CI with MongoDB and Redis services:
+```yaml
+name: API IT (Postman)
+on:
+  push:
+  pull_request:
+jobs:
+  it:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build
+        run: mvn -q -DskipTests package
+      - name: Run app
+        run: |
+          nohup mvn -q -DskipTests spring-boot:run &
+          for i in {1..40}; do
+            if curl -sf http://localhost:8080/actuator/health >/dev/null; then
+              break
+            fi
+            sleep 3
+          done
+      - name: Install newman
+        run: npm install -g newman
+      - name: Run Postman integration tests
+        run: |
+          newman run postman/LightQ.postman_collection.json \
+            -e postman/LightQ.local.postman_environment.json \
+            --reporters cli,junit \
+            --reporter-junit-export target/newman-results.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: newman-results
+          path: target/newman-results.xml
+```
+
 Last Updated: December 2025
