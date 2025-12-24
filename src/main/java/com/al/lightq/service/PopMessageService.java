@@ -6,12 +6,10 @@ import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import java.util.Date;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -34,14 +32,11 @@ public class PopMessageService {
 
 	private final MongoTemplate mongoTemplate;
 	private final CacheService cacheService;
-	private final Executor taskExecutor;
 	private final LightQProperties lightQProperties;
 
-	public PopMessageService(MongoTemplate mongoTemplate, CacheService cacheService,
-			@Qualifier("taskExecutor") Executor taskExecutor, LightQProperties lightQProperties) {
+	public PopMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
 		this.mongoTemplate = mongoTemplate;
 		this.cacheService = cacheService;
-		this.taskExecutor = taskExecutor;
 		this.lightQProperties = lightQProperties;
 	}
 

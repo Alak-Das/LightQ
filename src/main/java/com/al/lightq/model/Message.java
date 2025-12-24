@@ -108,15 +108,6 @@ public class Message implements Serializable {
 		this(messageId, content, consumerGroup, new Date(), false);
 	}
 
-	/**
-	 * Creates a new Message instance with updated consumed status.
-	 *
-	 * @return a new Message instance with the consumed flag set to true
-	 */
-	public Message markConsumed() {
-		return new Message(this.id, this.content, this.consumerGroup, this.createdAt, true, this.deliveryCount,
-				this.reservedUntil, this.lastDeliveryAt, this.lastError);
-	}
 
 	/**
 	 * {@inheritDoc}

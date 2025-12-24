@@ -6,15 +6,11 @@ import static com.al.lightq.LightQConstants.RESERVED_UNTIL;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
-import com.mongodb.client.MongoClient;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
@@ -31,12 +27,8 @@ import org.springframework.stereotype.Service;
 public class PushMessageService {
 
 	private static final Logger logger = LoggerFactory.getLogger(PushMessageService.class);
-	private final MongoClient mongoClient;
-	@Value("${spring.data.mongodb.database}")
-	private String mongoDB;
 	private final MongoTemplate mongoTemplate;
 	private final CacheService cacheService;
-	private final Executor taskExecutor;
 	private final LightQProperties lightQProperties;
 
 	// For tests to override TTL via ReflectionTestUtils.setField("expireMinutes",
@@ -46,12 +38,9 @@ public class PushMessageService {
 	// Tracks which consumer groups have had indexes ensured to avoid repeated work
 	private final ConcurrentMap<String, Boolean> indexesEnsured = new ConcurrentHashMap<>();
 
-	public PushMessageService(MongoClient mongoClient, MongoTemplate mongoTemplate, CacheService cacheService,
-			@Qualifier("taskExecutor") Executor taskExecutor, LightQProperties lightQProperties) {
-		this.mongoClient = mongoClient;
+	public PushMessageService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
 		this.mongoTemplate = mongoTemplate;
 		this.cacheService = cacheService;
-		this.taskExecutor = taskExecutor;
 		this.lightQProperties = lightQProperties;
 	}
 

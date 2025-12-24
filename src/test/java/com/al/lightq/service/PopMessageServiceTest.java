@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +31,6 @@ public class PopMessageServiceTest {
 	@Mock
 	private CacheService cacheService;
 
-	@Mock(name = "taskExecutor")
-	private Executor taskExecutor;
 
 	@InjectMocks
 	private PopMessageService popMessageService;
@@ -65,7 +62,6 @@ public class PopMessageServiceTest {
         assertTrue(result.isPresent());
         assertEquals(message, result.get());
         verify(cacheService, times(1)).popMessage(consumerGroup);
-        verify(taskExecutor, never()).execute(any(Runnable.class));
         verify(mongoTemplate, times(1)).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class), anyString());
     }
 
@@ -79,7 +75,6 @@ public class PopMessageServiceTest {
         assertTrue(result.isPresent());
         assertEquals(message, result.get());
         verify(cacheService, times(1)).popMessage(consumerGroup);
-        verify(taskExecutor, never()).execute(any(Runnable.class));
         verify(mongoTemplate, times(1)).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class), anyString());
     }
 
@@ -92,7 +87,6 @@ public class PopMessageServiceTest {
 
         assertFalse(result.isPresent());
         verify(cacheService, times(1)).popMessage(consumerGroup);
-        verify(taskExecutor, never()).execute(any(Runnable.class));
         verify(mongoTemplate, times(1)).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class), anyString());
     }
 }

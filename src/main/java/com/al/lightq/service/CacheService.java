@@ -68,29 +68,6 @@ public class CacheService {
 		return popped;
 	}
 
-	/**
-	 * Views up to 'limit' messages in the cache without reading the whole list.
-	 *
-	 * @param consumerGroup
-	 *            the consumer group
-	 * @param limit
-	 *            maximum number of items to return (<=0 returns empty list)
-	 * @return the list of messages
-	 */
-	public List<Message> viewMessages(String consumerGroup, int limit) {
-		if (limit <= 0) {
-			return Collections.emptyList();
-		}
-		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		long end = Math.max(0, limit) - 1;
-		List<Message> cachedObjects = redisTemplate.opsForList().range(key, 0, end);
-		if (cachedObjects == null || cachedObjects.isEmpty()) {
-			logger.debug("Cache view: no entries for key={}", key);
-			return Collections.emptyList();
-		}
-		logger.debug("Cache view: key={}, size={}", key, cachedObjects.size());
-		return cachedObjects;
-	}
 
 	/**
 	 * Views messages in the cache.
