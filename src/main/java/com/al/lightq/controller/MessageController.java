@@ -135,19 +135,19 @@ public class MessageController {
 	// Acknowledgement endpoints
 
 	/**
-	 * Acknowledge a reserved message.
-	 * Marks the message as consumed and clears its reservation (reservedUntil=null).
-	 * Idempotent: returns 200 even if the message was already consumed. Returns 404 if the message does not exist in the given consumer group.
+	 * Acknowledge a reserved message. Marks the message as consumed and clears its
+	 * reservation (reservedUntil=null). Idempotent: returns 200 even if the message
+	 * was already consumed. Returns 404 if the message does not exist in the given
+	 * consumer group.
 	 *
-	 * Endpoint: POST /queue/ack
-	 * Headers:
-	 *   - consumerGroup: target consumer group (required)
-	 * Query Parameters:
-	 *   - id: message identifier (required)
-	 * Security: USER or ADMIN
+	 * Endpoint: POST /queue/ack Headers: - consumerGroup: target consumer group
+	 * (required) Query Parameters: - id: message identifier (required) Security:
+	 * USER or ADMIN
 	 *
-	 * @param consumerGroup The consumer group header.
-	 * @param messageId The message identifier to acknowledge.
+	 * @param consumerGroup
+	 *            The consumer group header.
+	 * @param messageId
+	 *            The message identifier to acknowledge.
 	 * @return 200 OK on success; 404 Not Found if the message does not exist.
 	 */
 	@PostMapping(ACK_URL)
@@ -159,21 +159,20 @@ public class MessageController {
 	}
 
 	/**
-	 * Negative acknowledgement for a reserved message.
-	 * Immediately re-queues the message by setting reservedUntil to now. Optionally records a reason for diagnostics.
-	 * No-op if the message is not found or already consumed.
+	 * Negative acknowledgement for a reserved message. Immediately re-queues the
+	 * message by setting reservedUntil to now. Optionally records a reason for
+	 * diagnostics. No-op if the message is not found or already consumed.
 	 *
-	 * Endpoint: POST /queue/nack
-	 * Headers:
-	 *   - consumerGroup: target consumer group (required)
-	 * Query Parameters:
-	 *   - id: message identifier (required)
-	 *   - reason: optional reason for the nack
-	 * Security: USER or ADMIN
+	 * Endpoint: POST /queue/nack Headers: - consumerGroup: target consumer group
+	 * (required) Query Parameters: - id: message identifier (required) - reason:
+	 * optional reason for the nack Security: USER or ADMIN
 	 *
-	 * @param consumerGroup The consumer group header.
-	 * @param messageId The message identifier to negative-ack.
-	 * @param reason Optional reason describing the nack cause.
+	 * @param consumerGroup
+	 *            The consumer group header.
+	 * @param messageId
+	 *            The message identifier to negative-ack.
+	 * @param reason
+	 *            Optional reason describing the nack cause.
 	 * @return 200 OK if updated; 404 Not Found / no-op otherwise.
 	 */
 	@PostMapping(NACK_URL)
@@ -186,21 +185,23 @@ public class MessageController {
 	}
 
 	/**
-	 * Extend the visibility timeout for a reserved message.
-	 * Updates reservedUntil to now + provided seconds if the message is currently reserved and unconsumed.
+	 * Extend the visibility timeout for a reserved message. Updates reservedUntil
+	 * to now + provided seconds if the message is currently reserved and
+	 * unconsumed.
 	 *
-	 * Endpoint: POST /queue/extend-visibility
-	 * Headers:
-	 *   - consumerGroup: target consumer group (required)
-	 * Query Parameters:
-	 *   - id: message identifier (required)
-	 *   - seconds: extension window in seconds (required, >=1 recommended)
+	 * Endpoint: POST /queue/extend-visibility Headers: - consumerGroup: target
+	 * consumer group (required) Query Parameters: - id: message identifier
+	 * (required) - seconds: extension window in seconds (required, >=1 recommended)
 	 * Security: USER or ADMIN
 	 *
-	 * @param consumerGroup The consumer group header.
-	 * @param messageId The message identifier to extend.
-	 * @param seconds The number of seconds to extend the current reservation.
-	 * @return 200 OK if extended; 400 Bad Request if not currently reserved or not found.
+	 * @param consumerGroup
+	 *            The consumer group header.
+	 * @param messageId
+	 *            The message identifier to extend.
+	 * @param seconds
+	 *            The number of seconds to extend the current reservation.
+	 * @return 200 OK if extended; 400 Bad Request if not currently reserved or not
+	 *         found.
 	 */
 	@PostMapping(EXTEND_VIS_URL)
 	public ResponseEntity<Void> extendVisibility(@RequestHeader(CONSUMER_GROUP_HEADER) String consumerGroup,
@@ -214,18 +215,18 @@ public class MessageController {
 	// DLQ endpoints
 
 	/**
-	 * View entries for the Dead Letter Queue (DLQ) of a consumer group.
-	 * Returns recent DLQ documents up to the provided limit (defaults to lightq.message-allowed-to-fetch).
+	 * View entries for the Dead Letter Queue (DLQ) of a consumer group. Returns
+	 * recent DLQ documents up to the provided limit (defaults to
+	 * lightq.message-allowed-to-fetch).
 	 *
-	 * Endpoint: GET /queue/dlq/view
-	 * Headers:
-	 *   - consumerGroup: target consumer group (required)
-	 * Query Parameters:
-	 *   - limit: max entries to return (optional)
+	 * Endpoint: GET /queue/dlq/view Headers: - consumerGroup: target consumer group
+	 * (required) Query Parameters: - limit: max entries to return (optional)
 	 * Security: ADMIN
 	 *
-	 * @param consumerGroup The consumer group whose DLQ is being viewed.
-	 * @param limit Optional limit for number of DLQ entries returned.
+	 * @param consumerGroup
+	 *            The consumer group whose DLQ is being viewed.
+	 * @param limit
+	 *            Optional limit for number of DLQ entries returned.
 	 * @return 200 OK with a list of DLQ documents.
 	 */
 	@GetMapping(DLQ_VIEW_URL)
@@ -237,18 +238,16 @@ public class MessageController {
 	}
 
 	/**
-	 * Replay selected DLQ entries back into the main queue and cache.
-	 * Removes the specified entries from the DLQ after reinsertion.
+	 * Replay selected DLQ entries back into the main queue and cache. Removes the
+	 * specified entries from the DLQ after reinsertion.
 	 *
-	 * Endpoint: POST /queue/dlq/replay
-	 * Headers:
-	 *   - consumerGroup: target consumer group (required)
-	 * Body:
-	 *   - JSON array of message IDs to replay
-	 * Security: ADMIN
+	 * Endpoint: POST /queue/dlq/replay Headers: - consumerGroup: target consumer
+	 * group (required) Body: - JSON array of message IDs to replay Security: ADMIN
 	 *
-	 * @param consumerGroup The consumer group whose DLQ entries should be replayed.
-	 * @param ids The list of message IDs to replay.
+	 * @param consumerGroup
+	 *            The consumer group whose DLQ entries should be replayed.
+	 * @param ids
+	 *            The list of message IDs to replay.
 	 * @return 200 OK with the count of messages successfully replayed.
 	 */
 	@PostMapping(DLQ_REPLAY_URL)

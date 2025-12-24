@@ -71,7 +71,12 @@ public class PushMessageService {
 		int contentLength = message.getContent() != null ? message.getContent().length() : 0;
 		logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
 				message.getConsumerGroup(), contentLength);
-		// Persist to DB first (correctness for reservation/ack)
+		// Save the Message to Cache
+		cacheService.addMessage(message);
+		logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
+				message.getConsumerGroup());
+
+		// Persist to DBs
 		try {
 			createTTLIndex(message);
 			mongoTemplate.insert(message, message.getConsumerGroup());
@@ -82,11 +87,6 @@ public class PushMessageService {
 					message.getConsumerGroup(), e.getMessage(), e);
 			throw e;
 		}
-
-		// Save the Message to Cache
-		cacheService.addMessage(message);
-		logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
-				message.getConsumerGroup());
 
 		return message;
 	}
