@@ -1,111 +1,118 @@
 package com.al.lightq.service;
 
-import com.al.lightq.model.Message;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.stereotype.Service;
+import static com.al.lightq.LightQConstants.*;
 
+import com.al.lightq.model.Message;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static com.al.lightq.util.LightQConstants.*;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.stereotype.Service;
 
 /**
  * Service for viewing messages in the queue for a specific consumer group.
  * <p>
- * It retrieves messages from both cache and MongoDB, combines them, and applies filtering and sorting.
+ * It retrieves messages from both cache and MongoDB, combines them, and applies
+ * filtering and sorting.
  * </p>
  */
 @Service
 public class ViewMessageService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
-    private final MongoTemplate mongoTemplate;
-    private final CacheService cacheService;
+	private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
+	private final MongoTemplate mongoTemplate;
+	private final CacheService cacheService;
 
-    public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
-        this.mongoTemplate = mongoTemplate;
-        this.cacheService = cacheService;
-    }
+	public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
+		this.mongoTemplate = mongoTemplate;
+		this.cacheService = cacheService;
+	}
 
-    /**
-     * Retrieves a list of messages for a given consumer group, with options to limit the count and filter by consumption status.
-     * <p>
-     * Messages are first retrieved from the cache and then from MongoDB, excluding duplicates.
-     * </p>
-     *
-     * @param consumerGroup The consumer group for which to retrieve messages.
-     * @param limit The maximum number of messages to return.
-     * @param consumed      An optional string ("yes" or "no") to filter messages by their consumed status.
-     * @return A sorted list of unique messages.
-     */
-    public List<Message> view(String consumerGroup, int limit, String consumed) {
-        final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
-        final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf(YES.equalsIgnoreCase(consumed)) : null;
-        logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit, hasConsumedParam ? consumed : NA);
+	/**
+	 * Retrieves a list of messages for a given consumer group, with options to
+	 * limit the count and filter by consumption status.
+	 * <p>
+	 * Messages are first retrieved from the cache and then from MongoDB, excluding
+	 * duplicates.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            The consumer group for which to retrieve messages.
+	 * @param limit
+	 *            The maximum number of messages to return.
+	 * @param consumed
+	 *            An optional string ("yes" or "no") to filter messages by their
+	 *            consumed status.
+	 * @return A sorted list of unique messages.
+	 */
+	public List<Message> view(String consumerGroup, int limit, String consumed) {
+		final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);
+		final Boolean consumedFlag = hasConsumedParam ? Boolean.valueOf(YES.equalsIgnoreCase(consumed)) : null;
+		logger.debug("View request: consumerGroup={}, messageCount={}, consumed={}", consumerGroup, limit,
+				hasConsumedParam ? consumed : NA);
 
-        // Fast-path: only consumed => DB only
-        if (Boolean.TRUE.equals(consumedFlag)) {
-            Query query = new Query()
-                    .addCriteria(Criteria.where(CONSUMED).is(true))
-                    .limit(limit);
-            List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
-            fromDb.sort(Comparator.comparing(Message::getCreatedAt));
-            logger.info("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
-            return fromDb;
-        }
+		// Fast-path: only consumed => DB only
+		if (Boolean.TRUE.equals(consumedFlag)) {
+			Query query = new Query().addCriteria(Criteria.where(CONSUMED).is(true))
+					.with(Sort.by(Sort.Direction.ASC, CREATED_AT)).limit(limit);
+			List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
+			fromDb.sort(Comparator.comparing(Message::getCreatedAt));
+			logger.info("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
+			return fromDb;
+		}
 
-        // Cache-first for unconsumed or no filter
-        List<Message> cached = cacheService.viewMessages(consumerGroup).stream().limit(limit).toList();
-        logger.debug("Cache returned {} {} messages for consumerGroup={}",
-                cached.size(),
-                consumedFlag == null ? "(no consumed filter)" : "unconsumed",
-                consumerGroup);
+		// Cache-first for unconsumed or no filter
+		List<Message> cached = cacheService.viewMessages(consumerGroup);
+		logger.debug("Cache returned {} {} messages for consumerGroup={}", cached.size(),
+				consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
 
-        if (cached.size() >= limit) {
-            List<Message> result = new ArrayList<>(cached);
-            result.sort(Comparator.comparing(Message::getCreatedAt));
-            logger.info("Returning {} {} messages for Consumer Group: {}",
-                    result.size(),
-                    consumedFlag == null ? "(no consumed filter)" : "unconsumed",
-                    consumerGroup);
-            return result;
-        }
+		if (cached.size() >= limit) {
+			List<Message> result = new ArrayList<>(cached);
+			result.sort(Comparator.comparing(Message::getCreatedAt));
+			List<Message> limited = result.subList(0, Math.min(limit, result.size()));
+			logger.info("Returning {} {} messages for Consumer Group: {}", limited.size(),
+					consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
+			return limited;
+		}
 
-        Set<String> cachedIds = cached.stream().map(Message::getId).collect(Collectors.toSet());
-        int remaining = limit - cached.size();
+		Set<String> cachedIds = cached.stream().map(Message::getId).collect(Collectors.toSet());
+		int remaining = limit - cached.size();
 
-        Query query = new Query().limit(remaining);
-        if (Boolean.FALSE.equals(consumedFlag)) {
-            query.addCriteria(Criteria.where(CONSUMED).is(false));
-        }
-        if (!cachedIds.isEmpty()) {
-            query.addCriteria(Criteria.where(ID).nin(cachedIds));
-            logger.debug("Excluding {} cached IDs from MongoDB query{}", cachedIds.size(),
-                    consumedFlag == null ? " (no consumed filter)" : "");
-        }
+		Query query = new Query().with(Sort.by(Sort.Direction.ASC, CREATED_AT)).limit(remaining);
+		if (Boolean.FALSE.equals(consumedFlag)) {
+			query.addCriteria(Criteria.where(CONSUMED).is(false));
+		}
+		if (!cachedIds.isEmpty()) {
+			query.addCriteria(Criteria.where(ID).nin(cachedIds));
+			logger.debug("Excluding {} cached IDs from MongoDB query{}", cachedIds.size(),
+					consumedFlag == null ? " (no consumed filter)" : "");
+		}
 
-        List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
+		List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
 
-        List<Message> combined = new ArrayList<>(cached.size() + fromDb.size());
-        combined.addAll(cached);
-        combined.addAll(fromDb);
-        combined.sort(Comparator.comparing(Message::getCreatedAt));
+		List<Message> combined = new ArrayList<>(cached.size() + fromDb.size());
+		combined.addAll(cached);
+		combined.addAll(fromDb);
+		combined.sort(Comparator.comparing(Message::getCreatedAt));
 
-        if (consumedFlag == null) {
-            logger.debug("MongoDB returned {} additional messages (no consumed filter) for consumerGroup={}", fromDb.size(), consumerGroup);
-            logger.info("Returning {} messages (no consumed filter) for Consumer Group: {}", combined.size(), consumerGroup);
-        } else {
-            logger.debug("MongoDB returned {} additional unconsumed messages for consumerGroup={}", fromDb.size(), consumerGroup);
-            logger.info("Returning {} unconsumed messages for Consumer Group: {}", combined.size(), consumerGroup);
-        }
-        return combined;
-    }
+		if (consumedFlag == null) {
+			logger.debug("MongoDB returned {} additional messages (no consumed filter) for consumerGroup={}",
+					fromDb.size(), consumerGroup);
+			logger.info("Returning {} messages (no consumed filter) for Consumer Group: {}", combined.size(),
+					consumerGroup);
+		} else {
+			logger.debug("MongoDB returned {} additional unconsumed messages for consumerGroup={}", fromDb.size(),
+					consumerGroup);
+			logger.info("Returning {} unconsumed messages for Consumer Group: {}", combined.size(), consumerGroup);
+		}
+		return combined;
+	}
 }

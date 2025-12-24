@@ -9,8 +9,8 @@ import org.springframework.cache.annotation.EnableCaching;
 /**
  * Main entry point for the LightQ application.
  * <p>
- * This class initializes the Spring Boot application and enables caching.
- * It also defines the OpenAPI documentation for the LightQ API.
+ * This class initializes the Spring Boot application and enables caching. It
+ * also defines the OpenAPI documentation for the LightQ API.
  * </p>
  */
 @SpringBootApplication
@@ -21,7 +21,8 @@ public class LightQApplication {
 	/**
 	 * Main method to run the Spring Boot application.
 	 *
-	 * @param args command line arguments
+	 * @param args
+	 *            command line arguments
 	 */
 	public static void main(String[] args) {
 		SpringApplication.run(LightQApplication.class, args);
