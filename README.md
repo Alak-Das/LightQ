@@ -15,27 +15,34 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Table of Contents
-1. Project Overview
-2. Key Features
-3. Architecture Overview
-4. Project Structure
-5. Technology Stack
-6. Getting Started
-7. Local Development
-8. Configuration
-9. Rate Limiting
-10. API Documentation
-11. Health Check
-12. Logging & Observability
-13. Testing
-14. Docker Deployment
-15. Security
-16. Performance Considerations
-17. Troubleshooting
-18. Contributing
-19. License
-20. Support
-21. Quick Reference Card
+- [1. Project Overview](#1-project-overview)
+- [2. Key Features](#2-key-features)
+- [3. Architecture Overview](#3-architecture-overview)
+- [4. Project Structure](#4-project-structure)
+- [5. Technology Stack](#5-technology-stack)
+- [6. Getting Started](#6-getting-started)
+- [7. Local Development](#7-local-development)
+- [8. Configuration](#8-configuration)
+  - [8.1 MongoDB](#81-mongodb)
+  - [8.2 Redis](#82-redis)
+  - [8.3 Security](#83-security)
+  - [8.4 Rate Limiting](#84-rate-limiting)
+  - [8.5 LightQ Core](#85-lightq-core)
+  - [8.6 Reservation / Ack / DLQ](#86-reservation--ack--dlq)
+  - [8.7 Thread Pool](#87-thread-pool)
+- [9. Rate Limiting](#9-rate-limiting)
+- [10. API Documentation](#10-api-documentation)
+- [11. Health Check](#11-health-check)
+- [12. Logging & Observability](#12-logging--observability)
+- [13. Testing](#13-testing)
+- [14. Docker Deployment](#14-docker-deployment)
+- [15. Security](#15-security)
+- [16. Performance Considerations](#16-performance-considerations)
+- [17. Troubleshooting](#17-troubleshooting)
+- [18. Contributing](#18-contributing)
+- [19. License](#19-license)
+- [20. Support](#20-support)
+- [21. Quick Reference Card](#21-quick-reference-card)
 
 ## 1. Project Overview
 
@@ -273,41 +280,62 @@ java -jar target/lightq-0.0.1-SNAPSHOT.jar
 ```
 
 6) Verify
-- Swagger: http://localhost:8080/swagger-ui/index.html
+- Swagger UI: http://localhost:8080/swagger-ui/index.html
+  - Note: endpoints are protected by HTTP Basic auth (see Security section).
 
 ## 8. Configuration
 
-All properties can be set via environment variables in containerized deployments.
+All properties can be set via environment variables in containerized deployments. The repository’s application.properties provides opinionated defaults.
 
+### 8.1 MongoDB
 | Variable | Default | Description |
 |----------|---------|-------------|
-| MongoDB |
 | MONGO_URI | mongodb://admin:password@localhost:27017 | Connection string |
 | MONGO_DB | lightq-db | Database name |
-| Redis |
+
+### 8.2 Redis
+| Variable | Default | Description |
+|----------|---------|-------------|
 | SPRING_DATA_REDIS_HOST | localhost | Redis host |
 | SPRING_DATA_REDIS_PORT | 6379 | Redis port |
 | SPRING_DATA_REDIS_PASSWORD | (empty) | Redis password |
-| Security |
+
+### 8.3 Security
+| Variable | Default | Description |
+|----------|---------|-------------|
 | SECURITY_USER_USERNAME | user | USER role |
 | SECURITY_USER_PASSWORD | password | USER password |
 | SECURITY_ADMIN_USERNAME | admin | ADMIN role |
 | SECURITY_ADMIN_PASSWORD | adminpassword | ADMIN password |
-| Rate limiting |
+
+### 8.4 Rate Limiting
+| Variable | Default | Description |
+|----------|---------|-------------|
 | RATE_LIMIT_PUSH_PER_SECOND | 10 | Push RPS limit (<=0 disables) |
 | RATE_LIMIT_POP_PER_SECOND | 20 | Pop RPS limit (<=0 disables) |
-| LightQ (view/cache/persist) |
+
+Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If unset, application.properties defaults apply.
+
+### 8.5 LightQ Core
+| Variable | Default | Description |
+|----------|---------|-------------|
 | LIGHTQ_MESSAGE_ALLOWED_TO_FETCH | 50 | /queue/view max results |
 | LIGHTQ_PERSISTENCE_DURATION_MINUTES | 1440 | MongoDB TTL (minutes) |
 | LIGHTQ_CACHE_TTL_MINUTES | 30 | Redis TTL (minutes) |
-| Reservation/Ack/DLQ |
+
+### 8.6 Reservation / Ack / DLQ
+| Variable | Default | Description |
+|----------|---------|-------------|
 | LIGHTQ_VISIBILITY_TIMEOUT_SECONDS | 30 | Reservation window |
 | LIGHTQ_MAX_DELIVERY_ATTEMPTS | 5 | Move to DLQ above this |
 | LIGHTQ_DLQ_SUFFIX | -dlq | DLQ collection suffix |
 | LIGHTQ_DLQ_TTL_MINUTES | (unset) | TTL for DLQ collection; unset disables |
 
-ThreadPool (see LightQConstants):
-- CORE_POOL_SIZE=5, MAX_POOL_SIZE=10, QUEUE_CAPACITY=25, THREAD_NAME_PREFIX=DBDataUpdater-
+### 8.7 Thread Pool
+- CORE_POOL_SIZE=5
+- MAX_POOL_SIZE=10
+- QUEUE_CAPACITY=25
+- THREAD_NAME_PREFIX=DBDataUpdater-
 
 ## 9. Rate Limiting
 
@@ -534,7 +562,7 @@ Actuator:
 GET /actuator/health
 ```
 
-Returns application status and dependency checks (Redis, MongoDB).
+Returns application status and dependency checks (Redis, MongoDB). This endpoint is publicly accessible.
 
 ## 12. Logging & Observability
 
@@ -576,6 +604,10 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Notes:
+- The service container uses MONGO_URI with authSource=admin to connect to the MongoDB service.
+- To enable Redis authentication, set SPRING_DATA_REDIS_PASSWORD and uncomment the redis command in docker-compose.yml.
+
 ## 15. Security
 
 - HTTP Basic Auth with BCrypted in-memory users
@@ -593,7 +625,7 @@ docker compose up -d --build
 - Monitor deliveryCount and DLQ volume
 - Suggested indexes:
   - createdAt (TTL)
-  - Optionally (consumed, createdAt)
+  - Compound read-path index: { consumed: 1, reservedUntil: 1, createdAt: 1 }
 
 ## 17. Troubleshooting
 
@@ -665,11 +697,11 @@ Defaults
 - ADMIN: admin/adminpassword
 - Redis: localhost:6379
 - MongoDB: mongodb://admin:password@localhost:27017
-- lightq.cache-ttl-minutes: 30
-- lightq.persistence-duration-minutes: 1440
 - rate.limit.push-per-second: 10
 - rate.limit.pop-per-second: 20
 - lightq.message-allowed-to-fetch: 50
+- lightq.persistence-duration-minutes: 1440
+- lightq.cache-ttl-minutes: 30
 - lightq.visibility-timeout-seconds: 30
 - lightq.max-delivery-attempts: 5
 - lightq.dlq-suffix: -dlq
