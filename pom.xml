@@ -2,21 +2,31 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
+
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.3.5</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
+
 	<groupId>com.al</groupId>
 	<artifactId>lightq</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>LightQ</name>
 	<description>LightQ is a lightweight, high-performance message queue service built with Spring Boot. It provides a RESTful API for pushing, popping, and viewing messages in different consumer groups.</description>
+
 	<properties>
 		<java.version>21</java.version>
-		
+		<maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
+		<checkstyle.version>10.17.0</checkstyle.version>
+		<spotless.plugin.version>2.43.0</spotless.plugin.version>
+		<spotless.gjf.version>1.25.2</spotless.gjf.version>
+		<spotless.pjf.version>2.47.0</spotless.pjf.version>
+		<maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
+		<skipPmd>true</skipPmd>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -43,7 +53,7 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.6.0</version>
 		</dependency>
-        
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -62,6 +72,123 @@
 
 	<build>
 		<plugins>
+			<!-- Formatting: Spotless with Google Java Format, import order and unused import removal -->
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>${spotless.plugin.version}</version>
+				<configuration>
+					<java>
+						<!-- Default import order (java,javax,org,com,...) -->
+						<importOrder/>
+						<!-- Remove unused imports automatically -->
+						<removeUnusedImports/>
+						<!-- Eclipse JDT formatter (JDK-agnostic, avoids javac internals) -->
+						<eclipse>
+							<version>4.26</version>
+						</eclipse>
+						<!-- Format both production and test code -->
+						<includes>
+							<include>src/main/java/**/*.java</include>
+							<include>src/test/java/**/*.java</include>
+						</includes>
+					</java>
+				</configuration>
+				<executions>
+					<execution>
+						<id>spotless-check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Static style checks: Checkstyle using Google checks (non-failing initially) -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>${maven.checkstyle.plugin.version}</version>
+				<dependencies>
+					<dependency>
+						<groupId>com.puppycrawl.tools</groupId>
+						<artifactId>checkstyle</artifactId>
+						<version>${checkstyle.version}</version>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<configLocation>google_checks.xml</configLocation>
+					<encoding>UTF-8</encoding>
+					<consoleOutput>true</consoleOutput>
+					<linkXRef>false</linkXRef>
+					<!-- Start as non-fatal to allow incremental cleanup; switch to true later -->
+					<failOnViolation>false</failOnViolation>
+				</configuration>
+				<executions>
+					<execution>
+						<id>checkstyle-verify</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>checkstyle</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Static analysis: PMD to detect unused code and common issues -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-pmd-plugin</artifactId>
+				<version>3.25.0</version>
+				<configuration>
+					<skip>${skipPmd}</skip>
+					<failOnViolation>false</failOnViolation>
+					<printFailingErrors>true</printFailingErrors>
+					<rulesets>
+						<ruleset>category/java/bestpractices.xml</ruleset>
+						<ruleset>category/java/errorprone.xml</ruleset>
+						<ruleset>category/java/performance.xml</ruleset>
+						<ruleset>category/java/codestyle.xml</ruleset>
+						<ruleset>category/java/design.xml</ruleset>
+						<ruleset>category/java/documentation.xml</ruleset>
+						<ruleset>category/java/multithreading.xml</ruleset>
+						<ruleset>category/java/security.xml</ruleset>
+					</rulesets>
+				</configuration>
+				<executions>
+					<execution>
+						<id>pmd</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>pmd</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Enforce Java version and basic rules -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>${maven.enforcer.plugin.version}</version>
+				<executions>
+					<execution>
+						<id>enforce-java</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireJavaVersion>
+									<version>[21,)</version>
+								</requireJavaVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -69,13 +196,18 @@
 				<configuration>
 					<source>21</source>
 					<target>21</target>
-					
+					<showWarnings>true</showWarnings>
+					<compilerArgs>
+						<arg>-Xlint:all</arg>
+					</compilerArgs>
 				</configuration>
 			</plugin>
+
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
