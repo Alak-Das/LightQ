@@ -97,59 +97,59 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 ### System Architecture
 
 ```mermaid
-graph TB
-    subgraph "Clients"
-        P[Producer]
-        C[Consumer]
-        A[Admin]
+flowchart TB
+  subgraph Clients
+    P[Producer]
+    C[Consumer]
+    A[Admin]
+  end
+
+  subgraph LightQ_Service
+    F[CorrelationIdFilter]
+    RL[RateLimitingInterceptor]
+    API[MessageController]
+
+    subgraph Service_Layer
+      PUSH[PushMessageService]
+      POP[PopMessageService]
+      ACK[AcknowledgementService]
+      VIEW[ViewMessageService]
+      DLQS[DlqService]
     end
 
-    subgraph "LightQ Service"
-        F[CorrelationIdFilter]
-        RL[RateLimitingInterceptor]
-        API[MessageController (/queue/*)]
+    CACHE[CacheService]
+    ASYNC[ThreadPoolTaskExecutor]
+  end
 
-        subgraph "Service Layer"
-            PUSH[PushMessageService]
-            POP[PopMessageService (Reservation)]
-            ACK[AcknowledgementService (ack/nack/extend)]
-            VIEW[ViewMessageService]
-            DLQ[DlqService (view/replay)]
-        end
+  subgraph Data_Layer
+    R[(Redis Lists)]
+    M[(MongoDB Collections)]
+    D[(MongoDB DLQ Collections)]
+  end
 
-        CACHE[CacheService (Redis)]
-        ASYNC[ThreadPoolTaskExecutor]
-    end
+  P -->|POST /queue/push| F
+  C -->|GET /queue/pop| F
+  C -->|POST /queue/ack| F
+  C -->|POST /queue/nack| F
+  C -->|POST /queue/extend-visibility| F
+  A -->|GET /queue/view| F
+  A -->|GET /queue/dlq/view| F
+  A -->|POST /queue/dlq/replay| F
 
-    subgraph "Data Layer"
-        R[(Redis Lists)]
-        M[(MongoDB Collections per Consumer Group)]
-        D[(MongoDB DLQ Collections: group + suffix)]
-    end
+  F --> RL --> API
+  API --> PUSH --> CACHE
+  API --> POP --> CACHE
+  API --> ACK
+  API --> VIEW
+  API --> DLQS
 
-    P -->|POST /queue/push| F
-    C -->|GET /queue/pop| F
-    C -->|POST /queue/ack| F
-    C -->|POST /queue/nack| F
-    C -->|POST /queue/extend-visibility| F
-    A -->|GET /queue/view| F
-    A -->|GET /queue/dlq/view| F
-    A -->|POST /queue/dlq/replay| F
-
-    F --> RL --> API
-    API --> PUSH --> CACHE
-    API --> POP --> CACHE
-    API --> ACK
-    API --> VIEW
-    API --> DLQ
-
-    CACHE <--> R
-    ASYNC -.-> M
-    POP --> M
-    ACK --> M
-    VIEW --> M
-    DLQ --> M
-    DLQ --> D
+  CACHE <--> R
+  ASYNC -.-> M
+  POP --> M
+  ACK --> M
+  VIEW --> M
+  DLQS --> M
+  DLQS --> D
 ```
 
 ### Data Flow
