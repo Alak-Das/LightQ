@@ -268,8 +268,6 @@ Option B: Local installations (start mongod and redis as you prefer).
 4) Build
 ```bash
 mvn clean package
-# or
-./mvnw clean package
 ```
 
 5) Run
@@ -705,6 +703,7 @@ Defaults
 - lightq.visibility-timeout-seconds: 30
 - lightq.max-delivery-attempts: 5
 - lightq.dlq-suffix: -dlq
+- lightq.dlq-ttl-minutes: (unset)
 
 —
 
