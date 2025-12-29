@@ -1,6 +1,5 @@
 package com.al.lightq.config;
 
-import com.al.lightq.LightQConstants;
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,12 +23,12 @@ public class AsyncConfig {
 	 * @return the thread pool task executor
 	 */
 	@Bean(name = "taskExecutor")
-	public ThreadPoolTaskExecutor taskExecutor() {
+	public ThreadPoolTaskExecutor taskExecutor(LightQProperties props) {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-		executor.setCorePoolSize(LightQConstants.CORE_POOL_SIZE);
-		executor.setMaxPoolSize(LightQConstants.MAX_POOL_SIZE);
-		executor.setQueueCapacity(LightQConstants.QUEUE_CAPACITY);
-		executor.setThreadNamePrefix(LightQConstants.THREAD_NAME_PREFIX);
+		executor.setCorePoolSize(props.getCorePoolSize());
+		executor.setMaxPoolSize(props.getMaxPoolSize());
+		executor.setQueueCapacity(props.getQueueCapacity());
+		executor.setThreadNamePrefix(props.getThreadNamePrefix());
 		executor.setTaskDecorator(runnable -> {
 			final java.util.Map<String, String> contextMap = MDC.getCopyOfContextMap();
 			return () -> {
@@ -43,8 +42,9 @@ public class AsyncConfig {
 				}
 			};
 		});
+		executor.setAllowCoreThreadTimeOut(props.isAllowCoreThreadTimeout());
 		executor.setWaitForTasksToCompleteOnShutdown(true);
-		executor.setAwaitTerminationSeconds(30);
+		executor.setAwaitTerminationSeconds(props.getAwaitTerminationSeconds());
 		executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
 		executor.initialize();
 		return executor;

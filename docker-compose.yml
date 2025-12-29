@@ -24,6 +24,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
     volumes:
       - mongo_data:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
     healthcheck:
       test: ["CMD-SHELL", "mongosh --quiet \"mongodb://$$MONGO_INITDB_ROOT_USERNAME:$$MONGO_INITDB_ROOT_PASSWORD@localhost:27017/admin?authSource=admin\" --eval \"db.adminCommand({ ping: 1 }).ok\""]
       interval: 10s
@@ -38,6 +40,8 @@ services:
     # command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

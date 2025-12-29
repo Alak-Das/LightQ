@@ -18,7 +18,8 @@ class AsyncConfigTest {
 
 	@Test
 	void taskExecutorBean() {
-		ThreadPoolTaskExecutor executor = asyncConfig.taskExecutor();
+		LightQProperties props = new LightQProperties();
+		ThreadPoolTaskExecutor executor = asyncConfig.taskExecutor(props);
 		assertNotNull(executor);
 		assertEquals(5, executor.getCorePoolSize());
 		assertEquals(10, executor.getMaxPoolSize());

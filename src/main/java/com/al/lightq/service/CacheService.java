@@ -57,8 +57,8 @@ public class CacheService {
 
 				list.leftPush(key, message);
 
-				int allowedFetch = (lightQProperties != null ? lightQProperties.getMessageAllowedToFetch() : 50);
-				int maxCacheEntries = Math.max(1, allowedFetch * 2);
+				int maxCacheEntries = Math.max(1,
+						lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
 				list.trim(key, 0, maxCacheEntries - 1);
 
 				ops.expire(key, Duration.ofMinutes(ttlMinutes));
@@ -106,8 +106,10 @@ public class CacheService {
 	/**
 	 * Views up to 'limit' oldest messages in the cache efficiently.
 	 *
-	 * @param consumerGroup the consumer group
-	 * @param limit maximum number of messages to return (>=1)
+	 * @param consumerGroup
+	 *            the consumer group
+	 * @param limit
+	 *            maximum number of messages to return (>=1)
 	 * @return up to 'limit' messages from the tail of the list
 	 */
 	public List<Message> viewMessages(String consumerGroup, int limit) {

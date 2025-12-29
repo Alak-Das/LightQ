@@ -6,8 +6,8 @@ import static com.al.lightq.LightQConstants.RESERVED_UNTIL;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +31,9 @@ public class PushMessageService {
 	private final MongoTemplate mongoTemplate;
 	private final CacheService cacheService;
 	private final LightQProperties lightQProperties;
-	// Tracks which consumer groups have had indexes ensured to avoid repeated work
-	private final ConcurrentMap<String, Boolean> indexesEnsured = new ConcurrentHashMap<>();
+	// Tracks which consumer groups have had indexes ensured (bounded to avoid
+	// memory growth)
+	private final Cache<String, Boolean> indexCache;
 	// For tests to override TTL via ReflectionTestUtils.setField("expireMinutes",
 	// ...)
 	private long expireMinutes;
@@ -42,6 +43,8 @@ public class PushMessageService {
 		this.mongoTemplate = mongoTemplate;
 		this.cacheService = cacheService;
 		this.lightQProperties = lightQProperties;
+		this.indexCache = Caffeine.newBuilder().maximumSize(lightQProperties.getIndexCacheMaxGroups())
+				.expireAfterAccess(java.time.Duration.ofMinutes(lightQProperties.getIndexCacheExpireMinutes())).build();
 	}
 
 	/**
@@ -94,13 +97,7 @@ public class PushMessageService {
 	 */
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();
-		if (Boolean.TRUE.equals(indexesEnsured.get(collection))) {
-			return;
-		}
-		synchronized (indexesEnsured) {
-			if (Boolean.TRUE.equals(indexesEnsured.get(collection))) {
-				return;
-			}
+		indexCache.get(collection, k -> {
 			long minutes = (this.expireMinutes > 0)
 					? this.expireMinutes
 					: lightQProperties.getPersistenceDurationMinutes();
@@ -113,8 +110,8 @@ public class PushMessageService {
 			// createdAt: 1 }
 			mongoTemplate.indexOps(collection).ensureIndex(new Index().on(CONSUMED, Sort.Direction.ASC)
 					.on(RESERVED_UNTIL, Sort.Direction.ASC).on(CREATED_AT, Sort.Direction.ASC));
-			indexesEnsured.put(collection, true);
 			logger.debug("Indexes ensured for collection: {}", collection);
-		}
+			return Boolean.TRUE;
+		});
 	}
 }
