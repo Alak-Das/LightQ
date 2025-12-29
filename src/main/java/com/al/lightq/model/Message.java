@@ -5,16 +5,15 @@ import java.io.Serializable;
 import java.util.Date;
 import java.util.Objects;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
 
 /**
  * Represents a message in the queue.
  * <p>
- * This class is used to store the message content, consumer group, and other
- * metadata.
+ * Stored in MongoDB per consumer group collection; operations target the
+ * collection named after the consumer group via MongoTemplate. Includes fields
+ * for reservation, visibility, delivery tracking, and diagnostics.
  * </p>
  */
-@Document(collection = "messages-queue")
 public class Message implements Serializable {
 
 	private static final long serialVersionUID = 1L;

@@ -2,14 +2,12 @@ package com.al.lightq.config;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.al.lightq.model.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
@@ -22,22 +20,10 @@ class RedisConfigTest {
 	@Mock
 	private RedisConnectionFactory redisConnectionFactory;
 
-	@Mock
-	private LightQProperties lightQProperties;
-
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		when(lightQProperties.getCacheTtlMinutes()).thenReturn(60);
-		redisConfig = new RedisConfig(lightQProperties);
-	}
-
-	@Test
-	void cacheManagerBean() {
-		CacheManager cacheManager = redisConfig.cacheManager(redisConnectionFactory);
-		assertNotNull(cacheManager);
-		// Further assertions could be made to verify cache configurations if needed
-		assertTrue(cacheManager.getCacheNames().isEmpty()); // No specific caches configured yet
+		redisConfig = new RedisConfig();
 	}
 
 	@Test

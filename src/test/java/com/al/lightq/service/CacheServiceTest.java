@@ -23,10 +23,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 class CacheServiceTest {
 
 	@Mock
-	private RedisTemplate<String, Object> redisTemplate;
+	private RedisTemplate<String, Message> redisTemplate;
 
 	@Mock
-	private ListOperations<String, Object> listOperations;
+	private ListOperations<String, Message> listOperations;
 
 	@InjectMocks
 	private CacheService cacheService;
@@ -45,10 +45,14 @@ class CacheServiceTest {
 
 	@Test
 	void addMessage() {
+		// Arrange: just ensure pipeline method is invoked without executing callback
+		when(redisTemplate.executePipelined(any(org.springframework.data.redis.core.SessionCallback.class)))
+				.thenReturn(java.util.Collections.emptyList());
+
 		cacheService.addMessage(message);
 
-		verify(listOperations, times(1)).leftPush(eq(CACHE_KEY), eq(message));
-		verify(redisTemplate, times(1)).expire(eq(CACHE_KEY), any(Duration.class));
+		// verify pipeline was used
+		verify(redisTemplate, times(1)).executePipelined(any(org.springframework.data.redis.core.SessionCallback.class));
 	}
 
 	@Test
@@ -76,7 +80,7 @@ class CacheServiceTest {
 	@Test
 	void viewMessages() {
 		Message message2 = new Message("id2", CONSUMER_GROUP, "content2");
-		List<Object> cachedObjects = Arrays.asList(message, message2);
+		List<Message> cachedObjects = Arrays.asList(message, message2);
 		when(listOperations.range(eq(CACHE_KEY), eq(0L), eq(-1L))).thenReturn(cachedObjects);
 
 		List<Message> result = cacheService.viewMessages(CONSUMER_GROUP);

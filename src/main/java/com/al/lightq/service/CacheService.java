@@ -46,8 +46,25 @@ public class CacheService {
 				? this.redisCacheTtlMinutes
 				: lightQProperties.getCacheTtlMinutes();
 		logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), ttlMinutes);
-		redisTemplate.opsForList().leftPush(key, message);
-		redisTemplate.expire(key, Duration.ofMinutes(ttlMinutes));
+
+		// Pipeline LPUSH + LTRIM + EXPIRE to minimize round-trips
+		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
+			@Override
+			@SuppressWarnings("unchecked")
+			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
+				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
+				org.springframework.data.redis.core.ListOperations<String, Message> list = ops.opsForList();
+
+				list.leftPush(key, message);
+
+				int allowedFetch = (lightQProperties != null ? lightQProperties.getMessageAllowedToFetch() : 50);
+				int maxCacheEntries = Math.max(1, allowedFetch * 2);
+				list.trim(key, 0, maxCacheEntries - 1);
+
+				ops.expire(key, Duration.ofMinutes(ttlMinutes));
+				return null;
+			}
+		});
 	}
 
 	/**
@@ -84,5 +101,24 @@ public class CacheService {
 		}
 		logger.debug("Cache view: key={}, size={}", key, cachedObjects.size());
 		return cachedObjects;
+	}
+
+	/**
+	 * Views up to 'limit' oldest messages in the cache efficiently.
+	 *
+	 * @param consumerGroup the consumer group
+	 * @param limit maximum number of messages to return (>=1)
+	 * @return up to 'limit' messages from the tail of the list
+	 */
+	public List<Message> viewMessages(String consumerGroup, int limit) {
+		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+		int safeLimit = Math.max(1, limit);
+		List<Message> tail = redisTemplate.opsForList().range(key, -safeLimit, -1);
+		if (tail == null || tail.isEmpty()) {
+			logger.debug("Cache view limited: no entries for key={}", key);
+			return Collections.emptyList();
+		}
+		logger.debug("Cache view limited: key={}, size={}", key, tail.size());
+		return tail;
 	}
 }

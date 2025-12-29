@@ -70,7 +70,7 @@ public class ViewMessageService {
 		}
 
 		// Cache-first for unconsumed or no filter
-		List<Message> cached = cacheService.viewMessages(consumerGroup);
+		List<Message> cached = cacheService.viewMessages(consumerGroup, limit);
 		logger.debug("Cache returned {} {} messages for consumerGroup={}", cached.size(),
 				consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
 

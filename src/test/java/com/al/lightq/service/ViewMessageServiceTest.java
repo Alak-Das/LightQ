@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -57,14 +58,14 @@ public class ViewMessageServiceTest {
 	@Test
     void testView_noConsumedFilter() {
         // When consumed is null, cache is consulted first, then DB tops up excluding cache IDs.
-        when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
+        when(cacheService.viewMessages(eq(consumerGroup), anyInt())).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message2, message3));
 
         List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
 
         assertEquals(2, result.size());
         assertTrue(result.containsAll(Arrays.asList(message2, message3)));
-        verify(cacheService, times(1)).viewMessages(consumerGroup);
+        verify(cacheService, times(1)).viewMessages(eq(consumerGroup), anyInt());
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 
@@ -76,46 +77,46 @@ public class ViewMessageServiceTest {
 
         assertEquals(1, result.size());
         assertTrue(result.contains(message2));
-        verify(cacheService, never()).viewMessages(consumerGroup);
+        verify(cacheService, never()).viewMessages(eq(consumerGroup), anyInt());
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 
 	@Test
     void testView_consumedNoFilter_cacheAndDb() {
-        when(cacheService.viewMessages(consumerGroup)).thenReturn(Arrays.asList(message1));
+        when(cacheService.viewMessages(eq(consumerGroup), anyInt())).thenReturn(Arrays.asList(message1));
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(Arrays.asList(message3));
 
         List<Message> result = viewMessageService.view(consumerGroup, messageCount, "no");
 
         assertEquals(2, result.size());
         assertTrue(result.containsAll(Arrays.asList(message1, message3)));
-        verify(cacheService, times(1)).viewMessages(consumerGroup);
+        verify(cacheService, times(1)).viewMessages(eq(consumerGroup), anyInt());
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 
 	@Test
 	void testView_consumedNoFilter_onlyCache() {
 		messageCount = 1;
-		when(cacheService.viewMessages(consumerGroup)).thenReturn(Arrays.asList(message1, message3));
+        when(cacheService.viewMessages(eq(consumerGroup), anyInt())).thenReturn(Arrays.asList(message1, message3));
 
 		List<Message> result = viewMessageService.view(consumerGroup, messageCount, "no");
 
 		assertEquals(1, result.size());
 		assertTrue(result.contains(message1));
-		verify(cacheService, times(1)).viewMessages(consumerGroup);
+		verify(cacheService, times(1)).viewMessages(eq(consumerGroup), anyInt());
 		verify(mongoTemplate, never()).find(any(Query.class), eq(Message.class), anyString());
 	}
 
 	@Test
     void testView_emptyResult() {
         // When consumed is null, cache is checked first; if both cache and DB are empty, result is empty.
-        when(cacheService.viewMessages(consumerGroup)).thenReturn(new ArrayList<>());
+        when(cacheService.viewMessages(eq(consumerGroup), anyInt())).thenReturn(new ArrayList<>());
         when(mongoTemplate.find(any(Query.class), eq(Message.class), anyString())).thenReturn(new ArrayList<>());
 
         List<Message> result = viewMessageService.view(consumerGroup, messageCount, null);
 
         assertTrue(result.isEmpty());
-        verify(cacheService, times(1)).viewMessages(consumerGroup);
+        verify(cacheService, times(1)).viewMessages(eq(consumerGroup), anyInt());
         verify(mongoTemplate, times(1)).find(any(Query.class), eq(Message.class), anyString());
     }
 }

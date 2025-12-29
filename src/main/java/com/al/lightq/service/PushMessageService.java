@@ -6,7 +6,6 @@ import static com.al.lightq.LightQConstants.RESERVED_UNTIL;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -78,10 +77,8 @@ public class PushMessageService {
 			createTTLIndex(message);
 			mongoTemplate.insert(message, message.getConsumerGroup());
 			logger.info("Message with ID {} persisted asynchronously in DB.", message.getId());
-			CompletableFuture.completedFuture(null);
 		} catch (Exception e) {
 			logger.error("Async persist failed for Message ID: {}", message.getId(), e);
-			CompletableFuture.failedFuture(e);
 		}
 	}
 

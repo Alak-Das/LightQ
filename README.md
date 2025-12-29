@@ -227,9 +227,9 @@ src/main/java/com/al/lightq/
 | Web | spring-boot-starter-web | 3.3.5 | REST |
 | Monitoring | Spring Boot Actuator | 3.3.5 | Health, metrics |
 | Cache | Redis | 7.x | In-memory lists |
-| Cache Client | Spring Data Redis | 3.3.5 | Redis template |
+| Cache Client | Spring Data Redis | managed by Spring Boot 3.3.5 | RedisTemplate |
 | Database | MongoDB | 7.0 | Durable storage |
-| DB Client | Spring Data MongoDB | 4.3.5 | MongoTemplate |
+| DB Client | Spring Data MongoDB | managed by Spring Boot 3.3.5 | MongoTemplate |
 | Security | spring-boot-starter-security | 3.3.5 | Basic Auth |
 | Docs | springdoc-openapi | 2.6.0 | Swagger UI |
 | Build | Maven | 3.9+ | Build & deps |
@@ -485,8 +485,7 @@ curl -u user:password -X POST "http://localhost:8080/queue/extend-visibility?id=
 
 Response
 - 200 OK if extended
-- 400 Bad Request if not currently reserved or invalid
-- 404 Not Found if message not found
+- 400 Bad Request if not currently reserved or message not found
 
 ---
 
