@@ -20,11 +20,13 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for popping messages, prioritizing cache and then falling back to the
+ * Service for reserving messages (pop), prioritizing cache and then falling back to the
  * database.
  * <p>
- * Messages popped from the cache are asynchronously marked as consumed in the
- * database.
+ * For cache candidates, attempts reservation by ID; otherwise reserves the oldest available
+ * message from MongoDB. Reservation increments deliveryCount and sets reservedUntil to
+ * now + visibilityTimeoutSeconds. A message is NOT marked consumed until explicitly acked.
+ * Messages exceeding maxDeliveryAttempts are moved to the DLQ with reason "max-deliveries".
  * </p>
  */
 @Service

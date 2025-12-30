@@ -10,7 +10,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 class RedisConfigTest {
@@ -33,10 +32,10 @@ class RedisConfigTest {
 		assertNotNull(redisTemplate.getKeySerializer());
 		assertTrue(redisTemplate.getKeySerializer() instanceof StringRedisSerializer);
 		assertNotNull(redisTemplate.getValueSerializer());
-		assertTrue(redisTemplate.getValueSerializer() instanceof Jackson2JsonRedisSerializer);
+		assertTrue(redisTemplate.getValueSerializer() instanceof RedisConfig.SmileMessageRedisSerializer);
 		assertNotNull(redisTemplate.getHashKeySerializer());
 		assertTrue(redisTemplate.getHashKeySerializer() instanceof StringRedisSerializer);
 		assertNotNull(redisTemplate.getHashValueSerializer());
-		assertTrue(redisTemplate.getHashValueSerializer() instanceof Jackson2JsonRedisSerializer);
+		assertTrue(redisTemplate.getHashValueSerializer() instanceof RedisConfig.SmileMessageRedisSerializer);
 	}
 }

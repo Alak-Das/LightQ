@@ -25,6 +25,7 @@ public final class LightQConstants {
 	// message operations
 	public static final String POP_URL = "/pop";
 	public static final String PUSH_URL = "/push";
+	public static final String BATCH_PUSH_URL = "/batch/push";
 	public static final String VIEW_URL = "/view";
 	// acknowledgement and visibility
 	public static final String ACK_URL = "/ack";

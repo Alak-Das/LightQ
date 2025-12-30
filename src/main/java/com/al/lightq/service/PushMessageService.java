@@ -79,7 +79,7 @@ public class PushMessageService {
 		try {
 			createTTLIndex(message);
 			mongoTemplate.insert(message, message.getConsumerGroup());
-			logger.info("Message with ID {} persisted asynchronously in DB.", message.getId());
+			logger.debug("Message with ID {} persisted asynchronously in DB.", message.getId());
 		} catch (Exception e) {
 			logger.error("Async persist failed for Message ID: {}", message.getId(), e);
 		}
@@ -95,6 +95,58 @@ public class PushMessageService {
 	 * @param message
 	 *            The {@link Message} for which to ensure the TTL index.
 	 */
+	/**
+	 * Batch push messages. Adds all to cache using pipelined LPUSHALL per group and
+	 * persists asynchronously to MongoDB grouped by consumerGroup.
+	 *
+	 * @param messages
+	 *            messages to push; null/empty list is a no-op
+	 * @return the input messages for convenience
+	 */
+	public java.util.List<Message> pushBatch(java.util.List<Message> messages) {
+		if (messages == null || messages.isEmpty()) {
+			return java.util.Collections.emptyList();
+		}
+		int size = messages.size();
+		logger.debug("Attempting batch push of {} messages across groups", size);
+
+		// Save to cache with one pipeline per call and single LPUSHALL per group
+		cacheService.addMessages(messages);
+
+		// Fire-and-forget MongoDB persistence in batch
+		persistToMongoBatch(messages);
+
+		return messages;
+	}
+
+	@Async("taskExecutor")
+	public void persistToMongoBatch(java.util.List<Message> messages) {
+		try {
+			// Group by consumer group
+			final java.util.Map<String, java.util.List<Message>> byGroup = new java.util.HashMap<>();
+			for (Message m : messages) {
+				if (m == null || m.getConsumerGroup() == null) {
+					continue;
+				}
+				byGroup.computeIfAbsent(m.getConsumerGroup(), k -> new java.util.ArrayList<>()).add(m);
+			}
+			// Ensure indexes once and bulk insert per group
+			for (java.util.Map.Entry<String, java.util.List<Message>> e : byGroup.entrySet()) {
+				java.util.List<Message> groupMsgs = e.getValue();
+				if (groupMsgs.isEmpty()) {
+					continue;
+				}
+				// Ensure indexes using the first message metadata
+				createTTLIndex(groupMsgs.get(0));
+				mongoTemplate.insert(groupMsgs, e.getKey());
+			}
+			logger.debug("Batch persisted {} messages asynchronously in DB across {} groups", messages.size(),
+					byGroup.size());
+		} catch (Exception e) {
+			logger.error("Async batch persist failed for {} messages", messages == null ? 0 : messages.size(), e);
+		}
+	}
+
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();
 		indexCache.get(collection, k -> {

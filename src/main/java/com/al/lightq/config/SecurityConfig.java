@@ -53,6 +53,7 @@ public class SecurityConfig {
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http.authorizeHttpRequests((requests) -> requests.requestMatchers("/actuator/health").permitAll()
 				.requestMatchers(LightQConstants.QUEUE_BASE_URL + LightQConstants.PUSH_URL,
+						LightQConstants.QUEUE_BASE_URL + LightQConstants.BATCH_PUSH_URL,
 						LightQConstants.QUEUE_BASE_URL + LightQConstants.POP_URL,
 						LightQConstants.QUEUE_BASE_URL + LightQConstants.ACK_URL,
 						LightQConstants.QUEUE_BASE_URL + LightQConstants.NACK_URL,
