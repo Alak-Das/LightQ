@@ -96,10 +96,11 @@ public class PushMessageService {
 	 *            The {@link Message} for which to ensure the TTL index.
 	 */
 	/**
-	 * Batch push messages. Adds all to cache using pipelined LPUSHALL per group and persists
-	 * asynchronously to MongoDB grouped by consumerGroup.
+	 * Batch push messages. Adds all to cache using pipelined LPUSHALL per group and
+	 * persists asynchronously to MongoDB grouped by consumerGroup.
 	 *
-	 * @param messages messages to push; null/empty list is a no-op
+	 * @param messages
+	 *            messages to push; null/empty list is a no-op
 	 * @return the input messages for convenience
 	 */
 	public java.util.List<Message> pushBatch(java.util.List<Message> messages) {
@@ -139,7 +140,8 @@ public class PushMessageService {
 				createTTLIndex(groupMsgs.get(0));
 				mongoTemplate.insert(groupMsgs, e.getKey());
 			}
-			logger.debug("Batch persisted {} messages asynchronously in DB across {} groups", messages.size(), byGroup.size());
+			logger.debug("Batch persisted {} messages asynchronously in DB across {} groups", messages.size(),
+					byGroup.size());
 		} catch (Exception e) {
 			logger.error("Async batch persist failed for {} messages", messages == null ? 0 : messages.size(), e);
 		}

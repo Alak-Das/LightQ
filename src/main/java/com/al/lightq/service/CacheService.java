@@ -12,10 +12,17 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for interacting with the Redis cache.
+ * Redis cache access for LightQ.
  * <p>
- * This class provides methods for adding, popping, and viewing messages in the
- * cache.
+ * Uses pipelined operations to minimize network round-trips:
+ * <ul>
+ *   <li>Single-call add: LPUSH + LTRIM + EXPIRE in one pipeline</li>
+ *   <li>Batch add: one LPUSHALL per consumer group via pipelining</li>
+ *   <li>Per-group bounds enforced via LTRIM and TTL refreshed per write</li>
+ *   <li>Tail reads (range -limit..-1) to efficiently fetch oldest entries</li>
+ * </ul>
+ * Keys are namespaced as "consumerGroupMessages:{group}".
+ * TTL, per-group bounds, and other cache knobs are driven by LightQProperties.
  * </p>
  */
 @Service
@@ -126,9 +133,11 @@ public class CacheService {
 
 	/**
 	 * Batch add messages grouped by consumer group using pipelining and LPUSHALL.
-	 * Minimizes network round-trips and trims per-group lists to the configured bound.
+	 * Minimizes network round-trips and trims per-group lists to the configured
+	 * bound.
 	 *
-	 * @param messages messages to add; ignored if null/empty
+	 * @param messages
+	 *            messages to add; ignored if null/empty
 	 */
 	public void addMessages(java.util.List<Message> messages) {
 		if (messages == null || messages.isEmpty()) {

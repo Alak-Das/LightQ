@@ -3,7 +3,10 @@ package com.al.lightq.config;
 import com.al.lightq.model.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.dataformat.smile.SmileFactory;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import java.time.Duration;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,11 +14,8 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
-import com.fasterxml.jackson.dataformat.smile.SmileFactory;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.SerializationException;
@@ -53,8 +53,7 @@ public class RedisConfig {
 
 		LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
 				.commandTimeout(Duration.ofSeconds(props.getRedisCommandTimeoutSeconds()))
-				.shutdownTimeout(Duration.ofSeconds(props.getRedisShutdownTimeoutSeconds()))
-				.poolConfig(poolConfig)
+				.shutdownTimeout(Duration.ofSeconds(props.getRedisShutdownTimeoutSeconds())).poolConfig(poolConfig)
 				.build();
 
 		return new LettuceConnectionFactory(standalone, clientConfig);

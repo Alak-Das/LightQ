@@ -24,11 +24,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * REST controller for handling message-related operations in the Simple Queue
- * Service.
+ * REST controller for LightQ message queue APIs.
  * <p>
- * Provides endpoints for pushing, popping, and viewing messages within consumer
- * groups.
+ * Base path: /queue. Exposes endpoints for:
+ * <ul>
+ *   <li>Push: POST /queue/push</li>
+ *   <li>Batch Push: POST /queue/batch/push</li>
+ *   <li>Pop (reserve): GET /queue/pop</li>
+ *   <li>Ack/Nack/Extend visibility: POST /queue/ack, /queue/nack, /queue/extend-visibility</li>
+ *   <li>View (admin): GET /queue/view</li>
+ *   <li>DLQ view/replay (admin): GET /queue/dlq/view, POST /queue/dlq/replay</li>
+ * </ul>
+ * Delivery semantics are at-least-once via reservation (visibility timeout) followed by
+ * explicit acknowledgement.
  * </p>
  */
 @RestController
@@ -79,16 +87,16 @@ public class MessageController {
 	}
 
 	/**
-	 * Batch push endpoint to reduce per-message overhead. Accepts a JSON array of string contents
-	 * and creates messages for the provided consumer group. Adds all to cache using a single
-	 * Redis pipeline (LPUSHALL per group) and asynchronously persists to MongoDB in groups.
+	 * Batch push endpoint to reduce per-message overhead. Accepts a JSON array of
+	 * string contents and creates messages for the provided consumer group. Adds
+	 * all to cache using a single Redis pipeline (LPUSHALL per group) and
+	 * asynchronously persists to MongoDB in groups.
 	 *
-	 * Request: POST /queue/batch/push
-	 * Headers: consumerGroup
-	 * Body: ["content-1", "content-2", ...]
+	 * Request: POST /queue/batch/push Headers: consumerGroup Body: ["content-1",
+	 * "content-2", ...]
 	 *
-	 * Response: 200 OK with an array of MessageResponse containing the created messages.
-	 * 400 if the body is empty.
+	 * Response: 200 OK with an array of MessageResponse containing the created
+	 * messages. 400 if the body is empty.
 	 */
 	@PostMapping(BATCH_PUSH_URL)
 	public ResponseEntity<java.util.List<MessageResponse>> batchPush(
@@ -97,7 +105,8 @@ public class MessageController {
 		if (contents == null || contents.isEmpty()) {
 			return ResponseEntity.badRequest().build();
 		}
-		logger.debug("Received batch push request for consumer group: {} with {} messages", consumerGroup, contents.size());
+		logger.debug("Received batch push request for consumer group: {} with {} messages", consumerGroup,
+				contents.size());
 		java.util.List<Message> messages = new java.util.ArrayList<>(contents.size());
 		for (String c : contents) {
 			messages.add(new Message(UUID.randomUUID().toString(), consumerGroup, c));

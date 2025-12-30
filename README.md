@@ -30,6 +30,8 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
   - [8.5 LightQ Core](#85-lightq-core)
   - [8.6 Reservation / Ack / DLQ](#86-reservation--ack--dlq)
   - [8.7 Thread Pool](#87-thread-pool)
+  - [8.8 Redis Client Tuning](#88-redis-client-tuning)
+  - [8.9 Cache/Index Bounds](#89-cacheindex-bounds)
 - [9. Rate Limiting](#9-rate-limiting)
 - [10. API Documentation](#10-api-documentation)
 - [11. Health Check](#11-health-check)
@@ -66,6 +68,7 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 
 ### Core
 - Push: Enqueue message to a consumer group
+- Batch Push: Efficient bulk enqueue with pipelined LPUSHALL and async bulk inserts
 - Pop (Reserve): Reserve oldest available message with a visibility timeout
 - Ack/Nack: Explicit acknowledgement to complete or re-queue
 - Extend Visibility: Increase reservation window
@@ -309,8 +312,8 @@ All properties can be set via environment variables in containerized deployments
 ### 8.4 Rate Limiting
 | Variable | Default | Description |
 |----------|---------|-------------|
-| RATE_LIMIT_PUSH_PER_SECOND | 10 | Push RPS limit (<=0 disables) |
-| RATE_LIMIT_POP_PER_SECOND | 20 | Pop RPS limit (<=0 disables) |
+| RATE_LIMIT_PUSH_PER_SECOND | 100 | Push RPS limit (<=0 disables) |
+| RATE_LIMIT_POP_PER_SECOND | 200 | Pop RPS limit (<=0 disables) |
 
 Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If unset, application.properties defaults apply.
 
@@ -334,6 +337,24 @@ Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If uns
 - MAX_POOL_SIZE=10
 - QUEUE_CAPACITY=25
 - THREAD_NAME_PREFIX=DBDataUpdater-
+- ALLOW_CORE_THREAD_TIMEOUT=true
+- AWAIT_TERMINATION_SECONDS=30
+
+### 8.8 Redis Client Tuning
+| Variable | Default | Description |
+|----------|---------|-------------|
+| LIGHTQ_REDIS_COMMAND_TIMEOUT_SECONDS | 5 | Lettuce command timeout (seconds) |
+| LIGHTQ_REDIS_SHUTDOWN_TIMEOUT_SECONDS | 2 | Lettuce shutdown timeout (seconds) |
+| LIGHTQ_REDIS_POOL_MAX_TOTAL | 64 | Max total pooled connections |
+| LIGHTQ_REDIS_POOL_MAX_IDLE | 32 | Max idle pooled connections |
+| LIGHTQ_REDIS_POOL_MIN_IDLE | 8 | Min idle pooled connections |
+
+### 8.9 Cache/Index Bounds
+| Variable | Default | Description |
+|----------|---------|-------------|
+| LIGHTQ_CACHE_MAX_ENTRIES_PER_GROUP | 100 | Max cached entries per consumer group (affects Redis LTRIM window) |
+| LIGHTQ_INDEX_CACHE_MAX_GROUPS | 1000 | Max groups tracked for ensured MongoDB indexes |
+| LIGHTQ_INDEX_CACHE_EXPIRE_MINUTES | 60 | Expiration (minutes) for index-tracking cache entries |
 
 ## 9. Rate Limiting
 
@@ -341,8 +362,8 @@ Fixed window per-second limits per endpoint (push/pop). HTTP 429 is returned whe
 
 application.properties:
 ```properties
-rate.limit.push-per-second=10
-rate.limit.pop-per-second=20
+rate.limit.push-per-second=100
+rate.limit.pop-per-second=200
 ```
 
 ## 10. API Documentation
@@ -393,6 +414,39 @@ Response 200
 ```json
 {"id":"<uuid>","content":"Hello, World!","createdAt":"2025-01-01T10:30:00"}
 ```
+
+### 1a) Batch Push (Bulk)
+Add multiple messages to a consumer group in one request. Minimizes per-message overhead and uses a single Redis pipeline per call, with async bulk inserts to MongoDB.
+
+Request
+```http
+POST /queue/batch/push
+Content-Type: application/json
+consumerGroup: my-group
+
+["message-1", "message-2", "message-3"]
+```
+
+cURL
+```bash
+curl -u user:password -X POST "http://localhost:8080/queue/batch/push" \
+  -H "consumerGroup: my-group" -H "Content-Type: application/json" \
+  -d '["message-1","message-2","message-3"]'
+```
+
+Response 200
+```json
+[
+  {"id":"<uuid1>","content":"message-1","createdAt":"..."},
+  {"id":"<uuid2>","content":"message-2","createdAt":"..."},
+  {"id":"<uuid3>","content":"message-3","createdAt":"..."}
+]
+```
+
+Validation
+- consumerGroup: ^[a-zA-Z0-9-_]{1,50}$
+- each content: not blank, <= 1MB
+- body must be a non-empty JSON array of strings
 
 ---
 
@@ -662,6 +716,11 @@ curl -u user:password -X POST "http://localhost:8080/queue/push" \
   -H "consumerGroup: test" -H "Content-Type: text/plain" \
   -d "message"
 
+# Batch Push (bulk)
+curl -u user:password -X POST "http://localhost:8080/queue/batch/push" \
+  -H "consumerGroup: test" -H "Content-Type: application/json" \
+  -d '["m1","m2","m3"]'
+
 # Pop (reserve)
 curl -u user:password "http://localhost:8080/queue/pop" \
   -H "consumerGroup: test"
@@ -698,8 +757,8 @@ Defaults
 - ADMIN: admin/adminpassword
 - Redis: localhost:6379
 - MongoDB: mongodb://admin:password@localhost:27017
-- rate.limit.push-per-second: 10
-- rate.limit.pop-per-second: 20
+- rate.limit.push-per-second: 100
+- rate.limit.pop-per-second: 200
 - lightq.message-allowed-to-fetch: 50
 - lightq.persistence-duration-minutes: 1440
 - lightq.cache-ttl-minutes: 30
