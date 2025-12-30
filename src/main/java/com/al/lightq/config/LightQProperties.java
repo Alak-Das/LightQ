@@ -81,6 +81,16 @@ public class LightQProperties {
 	@Min(0)
 	private int redisShutdownTimeoutSeconds = 2;
 
+	// Redis pooling (Lettuce + commons-pool2)
+	@Min(0)
+	private int redisPoolMaxTotal = 64;
+
+	@Min(0)
+	private int redisPoolMaxIdle = 32;
+
+	@Min(0)
+	private int redisPoolMinIdle = 8;
+
 	// Explicit getters and setters (replacing Lombok @Data)
 	public LightQProperties() {
 	}
@@ -227,5 +237,29 @@ public class LightQProperties {
 
 	public void setRedisShutdownTimeoutSeconds(int redisShutdownTimeoutSeconds) {
 		this.redisShutdownTimeoutSeconds = redisShutdownTimeoutSeconds;
+	}
+
+	public int getRedisPoolMaxTotal() {
+		return redisPoolMaxTotal;
+	}
+
+	public void setRedisPoolMaxTotal(int redisPoolMaxTotal) {
+		this.redisPoolMaxTotal = redisPoolMaxTotal;
+	}
+
+	public int getRedisPoolMaxIdle() {
+		return redisPoolMaxIdle;
+	}
+
+	public void setRedisPoolMaxIdle(int redisPoolMaxIdle) {
+		this.redisPoolMaxIdle = redisPoolMaxIdle;
+	}
+
+	public int getRedisPoolMinIdle() {
+		return redisPoolMinIdle;
+	}
+
+	public void setRedisPoolMinIdle(int redisPoolMinIdle) {
+		this.redisPoolMinIdle = redisPoolMinIdle;
 	}
 }

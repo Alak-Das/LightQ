@@ -123,4 +123,55 @@ public class CacheService {
 		logger.debug("Cache view limited: key={}, size={}", key, tail.size());
 		return tail;
 	}
+
+	/**
+	 * Batch add messages grouped by consumer group using pipelining and LPUSHALL.
+	 * Minimizes network round-trips and trims per-group lists to the configured bound.
+	 *
+	 * @param messages messages to add; ignored if null/empty
+	 */
+	public void addMessages(java.util.List<Message> messages) {
+		if (messages == null || messages.isEmpty()) {
+			return;
+		}
+		final long ttlMinutes = (this.redisCacheTtlMinutes > 0)
+				? this.redisCacheTtlMinutes
+				: lightQProperties.getCacheTtlMinutes();
+		final int maxCacheEntries = Math.max(1,
+				lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
+
+		// Group by consumerGroup to issue one LPUSHALL per group
+		final java.util.Map<String, java.util.List<Message>> byGroup = new java.util.HashMap<>();
+		for (Message m : messages) {
+			if (m == null || m.getConsumerGroup() == null) {
+				continue;
+			}
+			byGroup.computeIfAbsent(m.getConsumerGroup(), k -> new java.util.ArrayList<>()).add(m);
+		}
+		if (byGroup.isEmpty()) {
+			return;
+		}
+
+		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
+			@Override
+			@SuppressWarnings("unchecked")
+			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
+				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
+				org.springframework.data.redis.core.ListOperations<String, Message> list = ops.opsForList();
+
+				for (java.util.Map.Entry<String, java.util.List<Message>> e : byGroup.entrySet()) {
+					String key = LightQConstants.CACHE_PREFIX + e.getKey();
+					java.util.List<Message> groupMsgs = e.getValue();
+
+					// Single command for all values in this group
+					list.leftPushAll(key, groupMsgs);
+					// Trim to cap memory and ensure recency window
+					list.trim(key, 0, maxCacheEntries - 1);
+					// Refresh TTL per group
+					ops.expire(key, java.time.Duration.ofMinutes(ttlMinutes));
+				}
+				return null;
+			}
+		});
+	}
 }

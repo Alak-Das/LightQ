@@ -74,8 +74,37 @@ public class MessageController {
 				contentLength);
 		Message message = new Message(UUID.randomUUID().toString(), consumerGroup, content);
 		Message pushedMessage = pushMessageService.push(message);
-		logger.info("Message with ID {} pushed to consumer group {}", pushedMessage.getId(), consumerGroup);
+		logger.debug("Message with ID {} pushed to consumer group {}", pushedMessage.getId(), consumerGroup);
 		return new MessageResponse(pushedMessage);
+	}
+
+	/**
+	 * Batch push endpoint to reduce per-message overhead. Accepts a JSON array of string contents
+	 * and creates messages for the provided consumer group. Adds all to cache using a single
+	 * Redis pipeline (LPUSHALL per group) and asynchronously persists to MongoDB in groups.
+	 *
+	 * Request: POST /queue/batch/push
+	 * Headers: consumerGroup
+	 * Body: ["content-1", "content-2", ...]
+	 *
+	 * Response: 200 OK with an array of MessageResponse containing the created messages.
+	 * 400 if the body is empty.
+	 */
+	@PostMapping(BATCH_PUSH_URL)
+	public ResponseEntity<java.util.List<MessageResponse>> batchPush(
+			@RequestHeader(CONSUMER_GROUP_HEADER) @Pattern(regexp = "^[a-zA-Z0-9-_]{1,50}$", message = INVALID_CONSUMER_GROUP_MESSAGE) String consumerGroup,
+			@RequestBody java.util.List<@NotBlank(message = EMPTY_MESSAGE_CONTENT_MESSAGE) @Size(max = 1048576, message = MESSAGE_SIZE_EXCEEDED_MESSAGE) String> contents) {
+		if (contents == null || contents.isEmpty()) {
+			return ResponseEntity.badRequest().build();
+		}
+		logger.debug("Received batch push request for consumer group: {} with {} messages", consumerGroup, contents.size());
+		java.util.List<Message> messages = new java.util.ArrayList<>(contents.size());
+		for (String c : contents) {
+			messages.add(new Message(UUID.randomUUID().toString(), consumerGroup, c));
+		}
+		java.util.List<Message> pushed = pushMessageService.pushBatch(messages);
+		java.util.List<MessageResponse> response = pushed.stream().map(MessageResponse::new).toList();
+		return ResponseEntity.ok(response);
 	}
 
 	/**
@@ -92,9 +121,9 @@ public class MessageController {
 		logger.debug("Received pop request for consumer group: {}", consumerGroup);
 		Optional<Message> message = popMessageService.pop(consumerGroup);
 		if (message.isPresent()) {
-			logger.info("Message with ID {} popped from consumer group {}", message.get().getId(), consumerGroup);
+			logger.debug("Message with ID {} popped from consumer group {}", message.get().getId(), consumerGroup);
 		} else {
-			logger.info("No message found to pop for consumer group {}", consumerGroup);
+			logger.debug("No message found to pop for consumer group {}", consumerGroup);
 		}
 		return message.map(msg -> ResponseEntity.ok(new MessageResponse(msg)))
 				.orElse(ResponseEntity.notFound().build());
@@ -127,7 +156,7 @@ public class MessageController {
 		int limit = resolveLimit(messageCount);
 
 		List<Message> messages = viewMessageService.view(consumerGroup, limit, consumed);
-		logger.info("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(),
+		logger.debug("Returning {} messages for consumer group: {}, filtered by consumed status: {}", messages.size(),
 				consumerGroup, StringUtils.isEmpty(consumed) ? NA : consumed);
 		return ResponseEntity.ok(messages);
 	}

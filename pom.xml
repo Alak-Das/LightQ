@@ -25,6 +25,7 @@
 		<spotless.pjf.version>2.47.0</spotless.pjf.version>
 		<maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
 		<skipPmd>true</skipPmd>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
 	<dependencies>
@@ -72,6 +73,35 @@
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
 			<version>3.1.8</version>
+		</dependency>
+
+		<!-- Faster Jackson serialization -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.module</groupId>
+			<artifactId>jackson-module-afterburner</artifactId>
+		</dependency>
+
+		<!-- Microbenchmarks (JMH) -->
+		<dependency>
+			<groupId>org.openjdk.jmh</groupId>
+			<artifactId>jmh-core</artifactId>
+			<version>1.37</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.openjdk.jmh</groupId>
+			<artifactId>jmh-generator-annprocess</artifactId>
+			<version>1.37</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-smile</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-pool2</artifactId>
+			<version>2.12.0</version>
 		</dependency>
 	</dependencies>
 
@@ -124,7 +154,6 @@
 				</dependencies>
 				<configuration>
 					<configLocation>google_checks.xml</configLocation>
-					<encoding>UTF-8</encoding>
 					<consoleOutput>true</consoleOutput>
 					<linkXRef>false</linkXRef>
 					<!-- Start as non-fatal to allow incremental cleanup; switch to true later -->
