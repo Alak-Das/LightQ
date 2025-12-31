@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.5</version>
+		<version>4.0.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
@@ -19,11 +19,11 @@
 	<properties>
 		<java.version>21</java.version>
 		<maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
-		<checkstyle.version>10.17.0</checkstyle.version>
-		<spotless.plugin.version>2.43.0</spotless.plugin.version>
+		<checkstyle.version>12.3.0</checkstyle.version>
+		<spotless.plugin.version>3.1.0</spotless.plugin.version>
 		<spotless.gjf.version>1.25.2</spotless.gjf.version>
 		<spotless.pjf.version>2.47.0</spotless.pjf.version>
-		<maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
+		<maven.enforcer.plugin.version>3.6.2</maven.enforcer.plugin.version>
 		<skipPmd>true</skipPmd>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -52,7 +52,7 @@
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>2.6.0</version>
+			<version>3.0.0</version>
 		</dependency>
 
 		<dependency>
@@ -67,12 +67,26 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-test-autoconfigure</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
-			<version>3.1.8</version>
 		</dependency>
 
 		<!-- Faster Jackson serialization -->
@@ -101,7 +115,6 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-pool2</artifactId>
-			<version>2.12.0</version>
 		</dependency>
 	</dependencies>
 
@@ -174,7 +187,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-pmd-plugin</artifactId>
-				<version>3.25.0</version>
+				<version>3.28.0</version>
 				<configuration>
 					<skip>${skipPmd}</skip>
 					<failOnViolation>false</failOnViolation>
@@ -214,6 +227,9 @@
 						</goals>
 						<configuration>
 							<rules>
+								<requireMavenVersion>
+									<version>[3.6.3,)</version>
+								</requireMavenVersion>
 								<requireJavaVersion>
 									<version>[21,)</version>
 								</requireJavaVersion>
@@ -226,7 +242,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.11.0</version>
+				<version>3.14.1</version>
 				<configuration>
 					<source>21</source>
 					<target>21</target>
@@ -245,7 +261,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.2.5</version>
+				<version>3.5.4</version>
 				<configuration>
 					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
 				</configuration>

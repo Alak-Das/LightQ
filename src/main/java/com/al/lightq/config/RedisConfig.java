@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import io.lettuce.core.api.StatefulConnection;
 import java.time.Duration;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,7 +47,7 @@ public class RedisConfig {
 			standalone.setPassword(RedisPassword.of(password));
 		}
 
-		GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
+		GenericObjectPoolConfig<StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
 		poolConfig.setMaxTotal(props.getRedisPoolMaxTotal());
 		poolConfig.setMaxIdle(props.getRedisPoolMaxIdle());
 		poolConfig.setMinIdle(props.getRedisPoolMinIdle());

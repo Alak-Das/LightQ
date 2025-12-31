@@ -1,6 +1,6 @@
 # LightQ
 
-A lightweight, high-performance message queue service built with Spring Boot 3.3.5 and Java 21. LightQ provides RESTful APIs for asynchronous message processing with:
+A lightweight, high-performance message queue service built with Spring Boot 4.0.1 and Java 21. LightQ provides RESTful APIs for asynchronous message processing with:
 - Consumer groups (multi-tenant queues)
 - Redis caching for fast access
 - MongoDB persistence with TTL
@@ -8,7 +8,7 @@ A lightweight, high-performance message queue service built with Spring Boot 3.3
 - Dead Letter Queue (DLQ) with replay
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.5-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Redis](https://img.shields.io/badge/Redis-Cache-red.svg)](https://redis.io/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-green.svg)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://www.docker.com/)
@@ -225,15 +225,15 @@ src/main/java/com/al/lightq/
 
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
-| Framework | Spring Boot | 3.3.5 | Application framework |
+| Framework | Spring Boot | 4.0.1 | Application framework |
 | Language | Java | 21 | LTS |
-| Web | spring-boot-starter-web | 3.3.5 | REST |
-| Monitoring | Spring Boot Actuator | 3.3.5 | Health, metrics |
+| Web | spring-boot-starter-web | 4.0.1 | REST |
+| Monitoring | Spring Boot Actuator | 4.0.1 | Health, metrics |
 | Cache | Redis | 7.x | In-memory lists |
-| Cache Client | Spring Data Redis + Caffeine | Spring Boot managed / 3.1.8 | RedisTemplate + in-memory caches |
+| Cache Client | Spring Data Redis + Caffeine | Managed by Spring Boot 4.0.x | RedisTemplate + in-memory caches |
 | Database | MongoDB | 7.0 | Durable storage |
-| DB Client | Spring Data MongoDB | managed by Spring Boot 3.3.5 | MongoTemplate |
-| Security | spring-boot-starter-security | 3.3.5 | Basic Auth |
+| DB Client | Spring Data MongoDB | Managed by Spring Boot 4.0.x | MongoTemplate |
+| Security | spring-boot-starter-security | 4.0.1 | Basic Auth |
 | Docs | springdoc-openapi | 2.6.0 | Swagger UI |
 | Build | Maven | 3.9+ | Build & deps |
 | Container | Docker + Distroless | latest | Containerization |
@@ -769,7 +769,7 @@ Defaults
 
 —
 
-Built with Spring Boot 3.3.5 and Java 21
+Built with Spring Boot 4.0.1 and Java 21
 Repository: https://github.com/Alak-Das/LightQ
 ## 22. Postman/Newman Integration Tests
 
