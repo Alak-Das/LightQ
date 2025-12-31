@@ -74,6 +74,17 @@ public class PushMessageService {
 		return message;
 	}
 
+	/**
+	 * Asynchronously persists the message to MongoDB.
+	 * <p>
+	 * Ensures required indexes for the consumer group and inserts the document with
+	 * bounded retries and exponential backoff. This is fire-and-forget and does not
+	 * block the caller of push().
+	 * </p>
+	 *
+	 * @param message
+	 *            the message to persist
+	 */
 	@Async("taskExecutor")
 	public void persistToMongo(Message message) {
 		createTTLIndex(message);
@@ -85,16 +96,6 @@ public class PushMessageService {
 		}
 	}
 
-	/**
-	 * Ensures a TTL (Time-To-Live) index exists on the 'createdAt' field for the
-	 * message's collection.
-	 * <p>
-	 * This index automatically deletes documents after a specified time.
-	 * </p>
-	 *
-	 * @param message
-	 *            The {@link Message} for which to ensure the TTL index.
-	 */
 	/**
 	 * Batch push messages. Adds all to cache using pipelined LPUSHALL per group and
 	 * persists asynchronously to MongoDB grouped by consumerGroup.
@@ -119,6 +120,18 @@ public class PushMessageService {
 		return messages;
 	}
 
+	/**
+	 * Asynchronously persists a batch of messages to MongoDB grouped by consumer
+	 * group.
+	 * <p>
+	 * Ensures indexes once per group and performs a bulk insert per group with
+	 * bounded retries and exponential backoff. Fire-and-forget, does not block the
+	 * caller of pushBatch().
+	 * </p>
+	 *
+	 * @param messages
+	 *            the messages to persist; null/empty list is ignored
+	 */
 	@Async("taskExecutor")
 	public void persistToMongoBatch(java.util.List<Message> messages) {
 		try {
@@ -151,6 +164,14 @@ public class PushMessageService {
 		}
 	}
 
+	/**
+	 * Inserts a single message with bounded retry and exponential backoff.
+	 *
+	 * @param message
+	 *            the message to insert
+	 * @return true if insert eventually succeeded within retry budget; false
+	 *         otherwise
+	 */
 	private boolean insertWithRetry(Message message) {
 		final String collection = message.getConsumerGroup();
 		final int maxAttempts = 3;
@@ -176,6 +197,17 @@ public class PushMessageService {
 		return false;
 	}
 
+	/**
+	 * Inserts a list of messages into the given collection with bounded retry and
+	 * exponential backoff.
+	 *
+	 * @param groupMsgs
+	 *            the messages to insert
+	 * @param collection
+	 *            the MongoDB collection (consumer group) name
+	 * @return true if insert eventually succeeded within retry budget; false
+	 *         otherwise
+	 */
 	private boolean insertListWithRetry(java.util.List<Message> groupMsgs, String collection) {
 		final int maxAttempts = 3;
 		long backoffMs = 100L;
@@ -200,6 +232,20 @@ public class PushMessageService {
 		return false;
 	}
 
+	/**
+	 * Ensures the necessary indexes for the consumer group's collection:
+	 * <ul>
+	 * <li>Partial TTL index on createdAt for documents where consumed=true</li>
+	 * <li>Compound index on { consumed, reservedUntil, createdAt } to speed
+	 * reads</li>
+	 * </ul>
+	 * TTL minutes are sourced from LightQProperties, or can be overridden in tests
+	 * via expireMinutes.
+	 *
+	 * @param message
+	 *            The {@link Message} providing the target consumer group
+	 *            (collection)
+	 */
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();
 		indexCache.get(collection, k -> {

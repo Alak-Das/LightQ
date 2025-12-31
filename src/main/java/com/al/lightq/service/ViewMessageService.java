@@ -37,21 +37,31 @@ public class ViewMessageService {
 	}
 
 	/**
-	 * Retrieves a list of messages for a given consumer group, with options to
-	 * limit the count and filter by consumption status.
+	 * Retrieves messages for a consumer group with optional consumption filter and
+	 * count limit.
 	 * <p>
-	 * Messages are first retrieved from the cache and then from MongoDB, excluding
-	 * duplicates.
+	 * Behavior:
+	 * <ul>
+	 * <li>If consumed is "yes" (case-insensitive): fetches only from MongoDB where
+	 * consumed=true.</li>
+	 * <li>If consumed is "no": returns unconsumed messages, preferring cache, then
+	 * fills from MongoDB.</li>
+	 * <li>If consumed is null/blank/any other value: returns unfiltered messages,
+	 * preferring cache then DB.</li>
+	 * </ul>
+	 * Cache results are de-duplicated against DB results by message id. Results are
+	 * sorted by createdAt ascending and truncated to at most limit entries.
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            The consumer group for which to retrieve messages.
+	 *            the consumer group (MongoDB collection) to read from
 	 * @param limit
-	 *            The maximum number of messages to return.
+	 *            maximum number of messages to return; if less than 1, the
+	 *            service's default limit is applied by caller
 	 * @param consumed
-	 *            An optional string ("yes" or "no") to filter messages by their
-	 *            consumed status.
-	 * @return A sorted list of unique messages.
+	 *            optional flag "yes" or "no" controlling filtering semantics (see
+	 *            above)
+	 * @return a list (size <= limit) of messages sorted by createdAt ascending
 	 */
 	public List<Message> view(String consumerGroup, int limit, String consumed) {
 		final boolean hasConsumedParam = StringUtils.isNotBlank(consumed);

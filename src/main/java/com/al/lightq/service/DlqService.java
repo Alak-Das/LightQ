@@ -16,7 +16,13 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for Dead-Letter Queue operations: view and replay.
+ * Dead-Letter Queue (DLQ) operations.
+ * <p>
+ * Provides admin functionality to inspect recent failed deliveries and to
+ * replay selected DLQ entries back into the main queue. Replay creates new
+ * messages with fresh IDs and re-inserts them into both MongoDB (main
+ * collection) and the cache for immediate availability.
+ * </p>
  */
 @Service
 public class DlqService {
@@ -34,7 +40,17 @@ public class DlqService {
 	}
 
 	/**
-	 * View latest DLQ entries for the consumer group.
+	 * Returns the most recent DLQ entries for the given consumer group.
+	 * <p>
+	 * Results are ordered by failedAt descending (newest first) and limited to the
+	 * provided size.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            the target consumer group whose DLQ to inspect
+	 * @param limit
+	 *            maximum number of DLQ documents to return
+	 * @return list of DLQ documents; empty list if none found
 	 */
 	public List<Document> view(String consumerGroup, int limit) {
 		String dlqCollection = consumerGroup + lightQProperties.getDlqSuffix();
@@ -46,10 +62,22 @@ public class DlqService {
 	}
 
 	/**
-	 * Replay DLQ entries by IDs. For each DLQ entry: - Creates a new Message with a
-	 * new ID and the same content/consumerGroup. - Saves to main collection with
-	 * consumed=false. - Pushes to cache for immediate availability. - Deletes the
-	 * DLQ entry. Returns the number of successfully replayed entries.
+	 * Replay DLQ entries by document IDs.
+	 * <p>
+	 * For each provided DLQ document id:
+	 * <ul>
+	 * <li>Create a new Message with a fresh id and same content/consumerGroup</li>
+	 * <li>Save to the main collection (consumed=false)</li>
+	 * <li>Push to cache for immediate availability</li>
+	 * <li>Delete the original DLQ document</li>
+	 * </ul>
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            the target consumer group whose DLQ entries should be replayed
+	 * @param ids
+	 *            list of DLQ document ids to replay; null/empty is treated as no-op
+	 * @return number of entries successfully replayed
 	 */
 	public int replay(String consumerGroup, List<String> ids) {
 		if (ids == null || ids.isEmpty()) {

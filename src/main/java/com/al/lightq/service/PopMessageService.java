@@ -113,6 +113,26 @@ public class PopMessageService {
 		return Optional.empty();
 	}
 
+	/**
+	 * Attempts to reserve a single message by ID for the given consumer group.
+	 * <p>
+	 * Uses a findAndModify with conditional criteria to ensure the message is
+	 * currently reservable (not consumed and either never reserved or reservation
+	 * expired). On success:
+	 * <ul>
+	 * <li>Increments deliveryCount</li>
+	 * <li>Sets reservedUntil to now + visibilityTimeoutSeconds</li>
+	 * <li>Sets lastDeliveryAt to now</li>
+	 * </ul>
+	 * </p>
+	 *
+	 * @param messageId
+	 *            message identifier to reserve
+	 * @param consumerGroup
+	 *            target consumer group (collection name)
+	 * @return Optional containing the newly reserved Message, or empty if not
+	 *         reservable
+	 */
 	private Optional<Message> reserveById(String messageId, String consumerGroup) {
 		Date now = new Date();
 		int vtSec = lightQProperties.getVisibilityTimeoutSeconds();
@@ -131,6 +151,19 @@ public class PopMessageService {
 		return Optional.ofNullable(message);
 	}
 
+	/**
+	 * Reserves the oldest available (FIFO by createdAt) message for the given
+	 * consumer group.
+	 * <p>
+	 * Selects the oldest document where consumed=false and reservation is currently
+	 * available (never reserved or reservation expired). On success, updates
+	 * reservation fields similar to {@link #reserveById(String, String)}.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            target consumer group (collection name)
+	 * @return Optional containing the reserved Message, or empty if none available
+	 */
 	private Optional<Message> reserveOldestAvailable(String consumerGroup) {
 		Date now = new Date();
 		int vtSec = lightQProperties.getVisibilityTimeoutSeconds();
@@ -150,6 +183,27 @@ public class PopMessageService {
 		return Optional.ofNullable(message);
 	}
 
+	/**
+	 * Moves the given message to the Dead Letter Queue (DLQ) for the consumer
+	 * group.
+	 * <p>
+	 * Actions performed:
+	 * <ul>
+	 * <li>Ensures DLQ indexes if TTL is configured</li>
+	 * <li>Inserts a copy of the message into the DLQ collection with failure
+	 * metadata</li>
+	 * <li>Marks the original message as consumed to exclude it from future
+	 * reservation</li>
+	 * </ul>
+	 * </p>
+	 *
+	 * @param message
+	 *            the message to move to DLQ
+	 * @param consumerGroup
+	 *            source consumer group
+	 * @param reason
+	 *            reason for DLQ (e.g., "max-deliveries")
+	 */
 	private void moveToDlq(Message message, String consumerGroup, String reason) {
 		String dlqCollection = consumerGroup + lightQProperties.getDlqSuffix();
 
@@ -179,6 +233,17 @@ public class PopMessageService {
 		logger.info("DLQ move completed: id={}, group={}, reason={}", message.getId(), consumerGroup, reason);
 	}
 
+	/**
+	 * Ensures TTL index for the DLQ collection if a positive TTL is configured.
+	 * <p>
+	 * When enabled, documents in the DLQ will expire automatically after the
+	 * configured number of minutes. If TTL is null or non-positive, no TTL index is
+	 * created.
+	 * </p>
+	 *
+	 * @param dlqCollection
+	 *            the DLQ collection name (group + suffix)
+	 */
 	private void ensureDlqIndexes(String dlqCollection) {
 		Integer ttl = lightQProperties.getDlqTtlMinutes();
 		if (ttl != null && ttl > 0) {

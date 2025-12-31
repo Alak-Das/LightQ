@@ -66,6 +66,18 @@ public class ErrorResponse {
 		this.requestId = requestId;
 	}
 
+	/**
+	 * Constructs an error response without a request identifier.
+	 *
+	 * @param status
+	 *            numeric HTTP status code
+	 * @param error
+	 *            short reason phrase
+	 * @param message
+	 *            human-readable diagnostic message
+	 * @param path
+	 *            request path that triggered the error
+	 */
 	public ErrorResponse(int status, String error, String message, String path) {
 		this.timestamp = LocalDateTime.now();
 		this.status = status;
@@ -74,6 +86,20 @@ public class ErrorResponse {
 		this.path = path;
 	}
 
+	/**
+	 * Constructs an error response including a request identifier for correlation.
+	 *
+	 * @param status
+	 *            numeric HTTP status code
+	 * @param error
+	 *            short reason phrase
+	 * @param message
+	 *            human-readable diagnostic message
+	 * @param path
+	 *            request path that triggered the error
+	 * @param requestId
+	 *            correlation id propagated via headers/MDC
+	 */
 	public ErrorResponse(int status, String error, String message, String path, String requestId) {
 		this.timestamp = LocalDateTime.now();
 		this.status = status;

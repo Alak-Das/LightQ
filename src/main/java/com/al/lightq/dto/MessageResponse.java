@@ -30,6 +30,16 @@ public class MessageResponse {
 		return createdAt;
 	}
 
+	/**
+	 * Constructs a response DTO from a domain Message.
+	 * <p>
+	 * Converts the Message createdAt (java.util.Date) to LocalDateTime using the
+	 * system default time zone.
+	 * </p>
+	 *
+	 * @param message
+	 *            source domain message
+	 */
 	public MessageResponse(Message message) {
 		this.id = message.getId();
 		this.content = message.getContent();

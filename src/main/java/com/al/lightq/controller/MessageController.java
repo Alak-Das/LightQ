@@ -298,6 +298,17 @@ public class MessageController {
 		return ResponseEntity.ok(count);
 	}
 
+	/**
+	 * Resolves an effective limit for result size.
+	 * <p>
+	 * If a positive value is provided, caps it by the configured
+	 * lightq.message-allowed-to-fetch. Otherwise returns the configured default.
+	 * </p>
+	 *
+	 * @param requested
+	 *            optional client-provided limit
+	 * @return a positive limit not exceeding the configured maximum
+	 */
 	private int resolveLimit(Integer requested) {
 		return (requested != null && requested > 0)
 				? Math.min(requested, lightQProperties.getMessageAllowedToFetch())

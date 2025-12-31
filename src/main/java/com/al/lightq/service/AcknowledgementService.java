@@ -34,8 +34,19 @@ public class AcknowledgementService {
 	}
 
 	/**
-	 * Acknowledge a message: marks consumed=true and clears reservation.
-	 * Idempotent: returns true if already consumed or updated.
+	 * Acknowledge a reserved message.
+	 * <p>
+	 * Marks the document as consumed (consumed=true) and clears its reservation
+	 * window (reservedUntil=null). This operation is idempotent: if the message was
+	 * already consumed, it is treated as success.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            the MongoDB collection (consumer group) to operate on
+	 * @param messageId
+	 *            the identifier of the message to acknowledge
+	 * @return true if the message was updated or was already consumed; false if the
+	 *         message does not exist in the given group
 	 */
 	public boolean ack(String consumerGroup, String messageId) {
 		Query query = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(false));
@@ -62,9 +73,20 @@ public class AcknowledgementService {
 	}
 
 	/**
-	 * Negative acknowledgement: immediately re-queues the message by setting
-	 * reservedUntil to now. No-op if the message is not currently
-	 * reserved/unconsumed.
+	 * Negative-acknowledge a reserved or previously reserved message.
+	 * <p>
+	 * Immediately re-queues the message by setting reservedUntil to the current
+	 * time, making it available for reservation again. No-op if the message is not
+	 * found or is already consumed.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            the MongoDB collection (consumer group)
+	 * @param messageId
+	 *            the message identifier
+	 * @param reason
+	 *            optional reason used for diagnostics and stored in lastError
+	 * @return true if the document was updated; false otherwise
 	 */
 	public boolean nack(String consumerGroup, String messageId, String reason) {
 		Date now = new Date();
@@ -90,8 +112,21 @@ public class AcknowledgementService {
 	}
 
 	/**
-	 * Extends visibility timeout for a reserved message. Sets reservedUntil to now
-	 * + extensionSeconds if message is unconsumed and was reserved.
+	 * Extend the visibility timeout for a reserved message.
+	 * <p>
+	 * If the message is currently reserved (reservedUntil > now) and unconsumed,
+	 * sets reservedUntil to now + extensionSeconds (at least 1 second).
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *            the MongoDB collection (consumer group)
+	 * @param messageId
+	 *            the message identifier to extend
+	 * @param extensionSeconds
+	 *            number of seconds to extend the current reservation; values <= 0
+	 *            are treated as 1
+	 * @return true if the reservation was extended; false if the message is not
+	 *         reserved, not found, or already consumed
 	 */
 	public boolean extendVisibility(String consumerGroup, String messageId, int extensionSeconds) {
 		Date now = new Date();
@@ -115,7 +150,13 @@ public class AcknowledgementService {
 	}
 
 	/**
-	 * Helper to check presence (for testing or future APIs).
+	 * Finds a message by ID in the given consumer group.
+	 *
+	 * @param consumerGroup
+	 *            the MongoDB collection (consumer group)
+	 * @param messageId
+	 *            the message identifier
+	 * @return Optional containing the message if present; otherwise empty
 	 */
 	public Optional<Message> findById(String consumerGroup, String messageId) {
 		return Optional.ofNullable(mongoTemplate.findById(messageId, Message.class, consumerGroup));
