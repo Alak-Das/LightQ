@@ -68,7 +68,7 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 
 ### Core
 - Push: Enqueue message to a consumer group
-- Batch Push: Efficient bulk enqueue with pipelined LPUSHALL and async bulk inserts
+- Batch Push: Efficient bulk enqueue with pipelined variadic LPUSH and async bulk inserts
 - Pop (Reserve): Reserve oldest available message with a visibility timeout
 - Ack/Nack: Explicit acknowledgement to complete or re-queue
 - Extend Visibility: Increase reservation window
@@ -230,7 +230,7 @@ src/main/java/com/al/lightq/
 | Web | spring-boot-starter-web | 3.3.5 | REST |
 | Monitoring | Spring Boot Actuator | 3.3.5 | Health, metrics |
 | Cache | Redis | 7.x | In-memory lists |
-| Cache Client | Spring Data Redis | managed by Spring Boot 3.3.5 | RedisTemplate |
+| Cache Client | Spring Data Redis + Caffeine | Spring Boot managed / 3.1.8 | RedisTemplate + in-memory caches |
 | Database | MongoDB | 7.0 | Durable storage |
 | DB Client | Spring Data MongoDB | managed by Spring Boot 3.3.5 | MongoTemplate |
 | Security | spring-boot-starter-security | 3.3.5 | Basic Auth |
