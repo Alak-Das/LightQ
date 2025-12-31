@@ -28,15 +28,16 @@ import org.springframework.web.bind.annotation.*;
  * <p>
  * Base path: /queue. Exposes endpoints for:
  * <ul>
- *   <li>Push: POST /queue/push</li>
- *   <li>Batch Push: POST /queue/batch/push</li>
- *   <li>Pop (reserve): GET /queue/pop</li>
- *   <li>Ack/Nack/Extend visibility: POST /queue/ack, /queue/nack, /queue/extend-visibility</li>
- *   <li>View (admin): GET /queue/view</li>
- *   <li>DLQ view/replay (admin): GET /queue/dlq/view, POST /queue/dlq/replay</li>
+ * <li>Push: POST /queue/push</li>
+ * <li>Batch Push: POST /queue/batch/push</li>
+ * <li>Pop (reserve): GET /queue/pop</li>
+ * <li>Ack/Nack/Extend visibility: POST /queue/ack, /queue/nack,
+ * /queue/extend-visibility</li>
+ * <li>View (admin): GET /queue/view</li>
+ * <li>DLQ view/replay (admin): GET /queue/dlq/view, POST /queue/dlq/replay</li>
  * </ul>
- * Delivery semantics are at-least-once via reservation (visibility timeout) followed by
- * explicit acknowledgement.
+ * Delivery semantics are at-least-once via reservation (visibility timeout)
+ * followed by explicit acknowledgement.
  * </p>
  */
 @RestController

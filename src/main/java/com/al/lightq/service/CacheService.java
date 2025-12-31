@@ -16,13 +16,13 @@ import org.springframework.stereotype.Service;
  * <p>
  * Uses pipelined operations to minimize network round-trips:
  * <ul>
- *   <li>Single-call add: LPUSH + LTRIM + EXPIRE in one pipeline</li>
- *   <li>Batch add: one LPUSHALL per consumer group via pipelining</li>
- *   <li>Per-group bounds enforced via LTRIM and TTL refreshed per write</li>
- *   <li>Tail reads (range -limit..-1) to efficiently fetch oldest entries</li>
+ * <li>Single-call add: LPUSH + LTRIM + EXPIRE in one pipeline</li>
+ * <li>Batch add: one LPUSHALL per consumer group via pipelining</li>
+ * <li>Per-group bounds enforced via LTRIM and TTL refreshed per write</li>
+ * <li>Tail reads (range -limit..-1) to efficiently fetch oldest entries</li>
  * </ul>
- * Keys are namespaced as "consumerGroupMessages:{group}".
- * TTL, per-group bounds, and other cache knobs are driven by LightQProperties.
+ * Keys are namespaced as "consumerGroupMessages:{group}". TTL, per-group
+ * bounds, and other cache knobs are driven by LightQProperties.
  * </p>
  */
 @Service
@@ -182,5 +182,31 @@ public class CacheService {
 				return null;
 			}
 		});
+	}
+
+	/**
+	 * Removes exactly one occurrence of the given message from the group's cache
+	 * list. Uses Redis LREM with count=1 on the serialized message value.
+	 *
+	 * Note: This relies on the RedisTemplate serializer producing the same bytes
+	 * for the peeked/deserialized Message instance. Do not mutate the message
+	 * before removal.
+	 *
+	 * @param consumerGroup
+	 *            the consumer group
+	 * @param message
+	 *            the message instance to remove
+	 * @return true if an element was removed
+	 */
+	public boolean removeOne(String consumerGroup, Message message) {
+		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+		Long removed = redisTemplate.opsForList().remove(key, 1, message);
+		boolean ok = removed != null && removed > 0;
+		if (ok) {
+			logger.debug("Cache removeOne: key={}, messageId={}", key, message.getId());
+		} else {
+			logger.debug("Cache removeOne miss: key={}, messageId={}", key, message.getId());
+		}
+		return ok;
 	}
 }

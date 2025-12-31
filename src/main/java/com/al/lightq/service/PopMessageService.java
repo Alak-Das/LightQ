@@ -20,13 +20,14 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for reserving messages (pop), prioritizing cache and then falling back to the
- * database.
+ * Service for reserving messages (pop), prioritizing cache and then falling
+ * back to the database.
  * <p>
- * For cache candidates, attempts reservation by ID; otherwise reserves the oldest available
- * message from MongoDB. Reservation increments deliveryCount and sets reservedUntil to
- * now + visibilityTimeoutSeconds. A message is NOT marked consumed until explicitly acked.
- * Messages exceeding maxDeliveryAttempts are moved to the DLQ with reason "max-deliveries".
+ * For cache candidates, attempts reservation by ID; otherwise reserves the
+ * oldest available message from MongoDB. Reservation increments deliveryCount
+ * and sets reservedUntil to now + visibilityTimeoutSeconds. A message is NOT
+ * marked consumed until explicitly acked. Messages exceeding
+ * maxDeliveryAttempts are moved to the DLQ with reason "max-deliveries".
  * </p>
  */
 @Service
@@ -63,25 +64,33 @@ public class PopMessageService {
 
 		int maxAttempts = lightQProperties.getMaxDeliveryAttempts();
 
-		// Try reserving from cache candidates
-		Message cached = cacheService.popMessage(consumerGroup);
-		while (cached != null) {
-			Optional<Message> reservedOpt = reserveById(cached.getId(), consumerGroup);
+		// Try reserving from cache candidates using a non-destructive peek, then
+		// conditionally remove from cache after successful DB reservation.
+		int scanWindow = Math.min(10, lightQProperties.getMessageAllowedToFetch());
+		java.util.List<Message> candidates = cacheService.viewMessages(consumerGroup, scanWindow);
+		for (Message candidate : candidates) {
+			if (candidate == null) {
+				continue;
+			}
+			Optional<Message> reservedOpt = reserveById(candidate.getId(), consumerGroup);
 			if (reservedOpt.isPresent()) {
 				Message reserved = reservedOpt.get();
 				if (reserved.getDeliveryCount() > maxAttempts) {
 					logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
 							reserved.getId(), maxAttempts, consumerGroup);
 					moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
-					cached = cacheService.popMessage(consumerGroup);
+					// do not remove the candidate from cache on DLQ move
+					// (it will age out by TTL and subsequent cache views will skip it)
 					continue;
 				}
+				// Reservation succeeded, remove exactly one occurrence from cache list
+				cacheService.removeOne(consumerGroup, candidate);
 				logger.info("Reserved message {} from cache for group {} with deliveryCount {}", reserved.getId(),
 						consumerGroup, reserved.getDeliveryCount());
 				return Optional.of(reserved);
 			}
-			// not reservable (stale/missing/reserved), drop and try next
-			cached = cacheService.popMessage(consumerGroup);
+			// Not reservable (stale/missing/reserved) -> leave in cache to avoid loss and
+			// try next
 		}
 
 		// Fallback to DB-only reservation
