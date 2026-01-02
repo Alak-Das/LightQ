@@ -45,6 +45,7 @@ A lightweight, high-performance message queue service built with Spring Boot 4.0
 - [19. License](#19-license)
 - [20. Support](#20-support)
 - [21. Quick Reference Card](#21-quick-reference-card)
+- [22. Postman/Newman Integration Tests](#22-postmannewman-integration-tests)
 
 ## 1. Project Overview
 
@@ -84,6 +85,7 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 ### Performance & Reliability
 - Redis cache for sub-millisecond list operations
 - MongoDB durable storage with TTL on createdAt
+- Compact binary Redis serialization using Jackson Smile + Afterburner
 - Async thread pool for background operations (e.g., TTL index, etc.)
 - Cache-first strategies where applicable
 
@@ -234,7 +236,7 @@ src/main/java/com/al/lightq/
 | Database | MongoDB | 7.0 | Durable storage |
 | DB Client | Spring Data MongoDB | Managed by Spring Boot 4.0.x | MongoTemplate |
 | Security | spring-boot-starter-security | 4.0.1 | Basic Auth |
-| Docs | springdoc-openapi | 2.6.0 | Swagger UI |
+| Docs | springdoc-openapi | 3.0.0 | Swagger UI |
 | Build | Maven | 3.9+ | Build & deps |
 | Container | Docker + Distroless | latest | Containerization |
 | Testing | JUnit 5, Mockito | latest | Unit/integration tests |
@@ -291,7 +293,7 @@ All properties can be set via environment variables in containerized deployments
 ### 8.1 MongoDB
 | Variable | Default | Description |
 |----------|---------|-------------|
-| MONGO_URI | mongodb://admin:password@localhost:27017 | Connection string |
+| MONGO_URI | mongodb://admin:password@localhost:27017/?authSource=admin | Connection string |
 | MONGO_DB | lightq-db | Database name |
 
 ### 8.2 Redis
@@ -756,7 +758,7 @@ Defaults
 - USER: user/password
 - ADMIN: admin/adminpassword
 - Redis: localhost:6379
-- MongoDB: mongodb://admin:password@localhost:27017
+- MongoDB: mongodb://admin:password@localhost:27017/?authSource=admin
 - rate.limit.push-per-second: 100
 - rate.limit.pop-per-second: 200
 - lightq.message-allowed-to-fetch: 50
@@ -880,4 +882,4 @@ jobs:
           path: target/newman-results.xml
 ```
 
-Last Updated: December 2025
+Last Updated: January 2026

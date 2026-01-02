@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
 
   mongodb:
-    image: mongo:latest
+    image: mongo:7.0
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis:7.4
     # To enable authentication, uncomment and set SPRING_DATA_REDIS_PASSWORD in .env
     # command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD}"]
     volumes:

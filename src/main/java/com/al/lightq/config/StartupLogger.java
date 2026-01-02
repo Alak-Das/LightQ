@@ -33,7 +33,7 @@ public class StartupLogger implements ApplicationRunner {
 	@Value("${spring.data.redis.port}")
 	private int redisPort;
 
-	@Value("${spring.data.mongodb.database}")
+	@Value("${spring.mongodb.database}")
 	private String mongoDb;
 
 	/**
