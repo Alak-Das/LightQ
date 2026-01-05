@@ -26,7 +26,7 @@ class PushMessageServiceTest {
 	private MongoTemplate mongoTemplate;
 
 	@Mock
-	private CacheService cacheService;
+	private RedisQueueService redisQueueService;
 
 	@Mock
 	private LightQProperties lightQProperties;
@@ -52,8 +52,8 @@ class PushMessageServiceTest {
 		String content = "testContent";
 		Message messageToPush = new Message("testId", consumerGroup, content);
 
-		// Mock addMessage call in CacheService (void method)
-		org.mockito.Mockito.doNothing().when(cacheService).addMessage(any(Message.class));
+		// Mock addMessage call in RedisQueueService (void method)
+		org.mockito.Mockito.doNothing().when(redisQueueService).addMessage(any(Message.class));
 		// Mock insert into MongoTemplate (non-void)
 		when(mongoTemplate.insert(any(Message.class), eq(consumerGroup))).thenReturn(messageToPush);
 
@@ -61,7 +61,7 @@ class PushMessageServiceTest {
 		assertNotNull(result);
 		assertEquals(content, result.getContent());
 		assertEquals(consumerGroup, result.getConsumerGroup());
-		org.mockito.Mockito.verify(cacheService, org.mockito.Mockito.times(1)).addMessage(messageToPush);
+		org.mockito.Mockito.verify(redisQueueService, org.mockito.Mockito.times(1)).addMessage(messageToPush);
 	}
 
 	@Test
@@ -78,7 +78,7 @@ class PushMessageServiceTest {
 		assertNotNull(result);
 
 		// Verify verify cache was skipped
-		org.mockito.Mockito.verify(cacheService, org.mockito.Mockito.never()).addMessage(any(Message.class));
+		org.mockito.Mockito.verify(redisQueueService, org.mockito.Mockito.never()).addMessage(any(Message.class));
 		// Verify DB persist was called
 		org.mockito.Mockito.verify(mongoTemplate, org.mockito.Mockito.atLeastOnce()).insert(any(Message.class),
 				eq(consumerGroup));

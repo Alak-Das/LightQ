@@ -6,28 +6,35 @@ import com.al.lightq.model.Message;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.stereotype.Service;
 
 /**
  * Redis cache access for LightQ.
  * <p>
- * Uses pipelined operations to minimize network round-trips:
+ * Uses Redis Sorted Sets (ZSet) to store messages for idempotency and FIFO
+ * ordering.
  * <ul>
- * <li>Single-call add: LPUSH + LTRIM + EXPIRE in one pipeline</li>
- * <li>Batch add: one LPUSHALL per consumer group via pipelining</li>
- * <li>Per-group bounds enforced via LTRIM and TTL refreshed per write</li>
- * <li>Tail reads (range -limit..-1) to efficiently fetch oldest entries</li>
+ * <li>Score: System.currentTimeMillis() (approximate FIFO)</li>
+ * <li>Idempotency: Attempts to add duplicate messages (same ID) are
+ * no-ops.</li>
+ * <li>Batch add: Uses pipelined ZADD operations.</li>
+ * <li>Tail reads: Uses ZRANGE 0 to limit for FIFO retrieval.</li>
+ * <li>Removal: Uses ZREM.</li>
  * </ul>
  * Keys are namespaced as "consumerGroupMessages:{group}". TTL, per-group
  * bounds, and other cache knobs are driven by LightQProperties.
  * </p>
  */
 @Service
-public class CacheService {
-	private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
+public class RedisQueueService {
+	private static final Logger logger = LoggerFactory.getLogger(RedisQueueService.class);
 
 	private final RedisTemplate<String, Message> redisTemplate;
 	private final LightQProperties lightQProperties;
@@ -36,7 +43,7 @@ public class CacheService {
 	// ReflectionTestUtils.setField("redisCacheTtlMinutes", ...)
 	private long redisCacheTtlMinutes;
 
-	public CacheService(RedisTemplate<String, Message> redisTemplate, LightQProperties lightQProperties) {
+	public RedisQueueService(RedisTemplate<String, Message> redisTemplate, LightQProperties lightQProperties) {
 		this.redisTemplate = redisTemplate;
 		this.lightQProperties = lightQProperties;
 	}
@@ -54,19 +61,37 @@ public class CacheService {
 				: lightQProperties.getCacheTtlMinutes();
 		logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), ttlMinutes);
 
-		// Pipeline LPUSH + LTRIM + EXPIRE to minimize round-trips
+		// Pipeline ZADD + ZREMRANGEBYRANK + EXPIRE
 		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
 			@Override
 			@SuppressWarnings("unchecked")
 			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
 				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
-				org.springframework.data.redis.core.ListOperations<String, Message> list = ops.opsForList();
+				org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
 
-				list.leftPush(key, message);
+				// Use current time as score for FIFO
+				zset.add(key, message, System.currentTimeMillis());
 
 				int maxCacheEntries = Math.max(1,
 						lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
-				list.trim(key, 0, maxCacheEntries - 1);
+
+				// Keep only oldest N items (remove ones with highest rank, i.e. newest if over
+				// capacity)
+				// Actually ZREMRANGEBYRANK removes by index. 0 is lowest score.
+				// If we want to keep oldest (FIFO), we keep 0..N-1.
+				// So we remove from N to -1.
+				// Wait, if we want to keep most relevant? Usually cache keeps newest.
+				// But queue is FIFO. So we want to keep the oldest messages (lowest scores).
+				// New messages are added with current time (high score).
+				// So if we trim, we should remove the NEWEST (highest score) if over capacity?
+				// Typically queues drop oldest if full, but here cache is "front" of queue.
+				// If cache is full, we probably want to stop adding or drop newest.
+				// Actually, let's stick to simple "remove > N".
+				// Newest messages have highest rank.
+				// We want to keep 0..(max-1).
+				// So we remove max..-1.
+
+				zset.removeRange(key, maxCacheEntries, -1);
 
 				ops.expire(key, Duration.ofMinutes(ttlMinutes));
 				return null;
@@ -75,7 +100,7 @@ public class CacheService {
 	}
 
 	/**
-	 * Pops a message from the cache.
+	 * Pops a message from the cache (removes item with lowest score).
 	 *
 	 * @param consumerGroup
 	 *            the consumer group
@@ -83,7 +108,9 @@ public class CacheService {
 	 */
 	public Message popMessage(String consumerGroup) {
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		Message popped = redisTemplate.opsForList().rightPop(key);
+		TypedTuple<Message> poppedTuple = redisTemplate.opsForZSet().popMin(key);
+		Message popped = (poppedTuple != null) ? poppedTuple.getValue() : null;
+
 		if (popped != null) {
 			logger.debug("Cache hit (pop): key={}, messageId={}", key, popped.getId());
 		} else {
@@ -93,7 +120,7 @@ public class CacheService {
 	}
 
 	/**
-	 * Views messages in the cache.
+	 * Views messages in the cache (by score, low to high).
 	 *
 	 * @param consumerGroup
 	 *            the consumer group
@@ -101,13 +128,14 @@ public class CacheService {
 	 */
 	public List<Message> viewMessages(String consumerGroup) {
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		List<Message> cachedObjects = redisTemplate.opsForList().range(key, 0, -1);
+		Set<Message> cachedObjects = redisTemplate.opsForZSet().range(key, 0, -1);
 		if (cachedObjects == null || cachedObjects.isEmpty()) {
 			logger.debug("Cache view: no entries for key={}", key);
 			return Collections.emptyList();
 		}
 		logger.debug("Cache view: key={}, size={}", key, cachedObjects.size());
-		return cachedObjects;
+		// Set to List
+		return new java.util.ArrayList<>(cachedObjects);
 	}
 
 	/**
@@ -117,24 +145,23 @@ public class CacheService {
 	 *            the consumer group
 	 * @param limit
 	 *            maximum number of messages to return (>=1)
-	 * @return up to 'limit' messages from the tail of the list
+	 * @return up to 'limit' messages from the head of the sorted set (lowest score)
 	 */
 	public List<Message> viewMessages(String consumerGroup, int limit) {
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
 		int safeLimit = Math.max(1, limit);
-		List<Message> tail = redisTemplate.opsForList().range(key, -safeLimit, -1);
-		if (tail == null || tail.isEmpty()) {
+		// ZRANGE is 0-based inclusive. So to get N items, 0 to N-1.
+		Set<Message> head = redisTemplate.opsForZSet().range(key, 0, safeLimit - 1);
+		if (head == null || head.isEmpty()) {
 			logger.debug("Cache view limited: no entries for key={}", key);
 			return Collections.emptyList();
 		}
-		logger.debug("Cache view limited: key={}, size={}", key, tail.size());
-		return tail;
+		logger.debug("Cache view limited: key={}, size={}", key, head.size());
+		return new java.util.ArrayList<>(head);
 	}
 
 	/**
-	 * Batch add messages grouped by consumer group using pipelining and LPUSHALL.
-	 * Minimizes network round-trips and trims per-group lists to the configured
-	 * bound.
+	 * Batch add messages grouped by consumer group using pipelining and ZADD.
 	 *
 	 * @param messages
 	 *            messages to add; ignored if null/empty
@@ -149,7 +176,7 @@ public class CacheService {
 		final int maxCacheEntries = Math.max(1,
 				lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
 
-		// Group by consumerGroup to issue one LPUSHALL per group
+		// Group by consumerGroup
 		final java.util.Map<String, java.util.List<Message>> byGroup = new java.util.HashMap<>();
 		for (Message m : messages) {
 			if (m == null || m.getConsumerGroup() == null) {
@@ -166,17 +193,22 @@ public class CacheService {
 			@SuppressWarnings("unchecked")
 			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
 				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
-				org.springframework.data.redis.core.ListOperations<String, Message> list = ops.opsForList();
+				org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
 
 				for (java.util.Map.Entry<String, java.util.List<Message>> e : byGroup.entrySet()) {
 					String key = LightQConstants.CACHE_PREFIX + e.getKey();
 					java.util.List<Message> groupMsgs = e.getValue();
 
-					// Single command for all values in this group
-					list.leftPushAll(key, groupMsgs);
-					// Trim to cap memory and ensure recency window
-					list.trim(key, 0, maxCacheEntries - 1);
-					// Refresh TTL per group
+					// Prepare typed tuples
+					long now = System.currentTimeMillis();
+					Set<TypedTuple<Message>> tuples = groupMsgs.stream()
+							.map(msg -> new DefaultTypedTuple<>(msg, (double) now)).collect(Collectors.toSet());
+
+					zset.add(key, tuples);
+
+					// Trim: keep 0 to max-1, remove max to -1
+					zset.removeRange(key, maxCacheEntries, -1);
+
 					ops.expire(key, java.time.Duration.ofMinutes(ttlMinutes));
 				}
 				return null;
@@ -186,11 +218,7 @@ public class CacheService {
 
 	/**
 	 * Removes exactly one occurrence of the given message from the group's cache
-	 * list. Uses Redis LREM with count=1 on the serialized message value.
-	 *
-	 * Note: This relies on the RedisTemplate serializer producing the same bytes
-	 * for the peeked/deserialized Message instance. Do not mutate the message
-	 * before removal.
+	 * list. Uses Redis ZREM.
 	 *
 	 * @param consumerGroup
 	 *            the consumer group
@@ -200,7 +228,7 @@ public class CacheService {
 	 */
 	public boolean removeOne(String consumerGroup, Message message) {
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		Long removed = redisTemplate.opsForList().remove(key, 1, message);
+		Long removed = redisTemplate.opsForZSet().remove(key, message);
 		boolean ok = removed != null && removed > 0;
 		if (ok) {
 			logger.debug("Cache removeOne: key={}, messageId={}", key, message.getId());

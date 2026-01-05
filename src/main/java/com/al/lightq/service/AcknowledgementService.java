@@ -54,7 +54,7 @@ public class AcknowledgementService {
 
 		UpdateResult result = mongoTemplate.updateFirst(query, update, Message.class, consumerGroup);
 		if (result.getModifiedCount() > 0) {
-			logger.info("Ack succeeded for messageId={} in group={}", messageId, consumerGroup);
+			logger.debug("Ack succeeded for messageId={} in group={}", messageId, consumerGroup);
 			return true;
 		}
 
@@ -62,13 +62,13 @@ public class AcknowledgementService {
 		Query already = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(true));
 		boolean exists = mongoTemplate.exists(already, Message.class, consumerGroup);
 		if (exists) {
-			logger.info("Ack idempotent success (already consumed) for messageId={} in group={}", messageId,
+			logger.debug("Ack idempotent success (already consumed) for messageId={} in group={}", messageId,
 					consumerGroup);
 			return true;
 		}
 
 		// Not found; return not found (404)
-		logger.info("Ack not found for messageId={} in group={}", messageId, consumerGroup);
+		logger.debug("Ack not found for messageId={} in group={}", messageId, consumerGroup);
 		return false;
 	}
 
@@ -103,9 +103,9 @@ public class AcknowledgementService {
 		UpdateResult result = mongoTemplate.updateFirst(query, update, Message.class, consumerGroup);
 		boolean modified = result.getModifiedCount() > 0;
 		if (modified) {
-			logger.info("Nack succeeded for messageId={} in group={} (reason={})", messageId, consumerGroup, reason);
+			logger.debug("Nack succeeded for messageId={} in group={} (reason={})", messageId, consumerGroup, reason);
 		} else {
-			logger.info("Nack no-op for messageId={} in group={} (not found or already consumed)", messageId,
+			logger.debug("Nack no-op for messageId={} in group={} (not found or already consumed)", messageId,
 					consumerGroup);
 		}
 		return modified;
@@ -140,11 +140,12 @@ public class AcknowledgementService {
 		Message updated = mongoTemplate.findAndModify(query, update, options, Message.class, consumerGroup);
 		boolean success = updated != null;
 		if (success) {
-			logger.info("Extended visibility for messageId={} in group={} until={}", messageId, consumerGroup,
+			logger.debug("Extended visibility for messageId={} in group={} until={}", messageId, consumerGroup,
 					newUntil);
 		} else {
-			logger.info("Extend-visibility no-op for messageId={} in group={} (not reserved or not found)", messageId,
+			logger.debug("Extend-visibility no-op for messageId={} in group={} (not reserved or not found)", messageId,
 					consumerGroup);
+
 		}
 		return success;
 	}

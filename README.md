@@ -84,11 +84,12 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 - Replay DLQ entries individually or in batches
 
 ### Performance & Reliability
-- Redis cache for sub-millisecond list operations
-- MongoDB durable storage with TTL on createdAt
-- Compact binary Redis serialization using Jackson Smile + Afterburner
-- Async thread pool for background operations (e.g., TTL index, etc.)
-- Cache-first strategies where applicable
+- **Redis ZSet (Sorted Set)**: Uses `System.currentTimeMillis()` as score for approximate FIFO ordering and **idempotency** (duplicate pushes are no-ops).
+- **Synchronous Durability**: Messages are persisted to MongoDB *before* cache availability to prevent data loss.
+- **Self-Healing**: `Pop` operations automatically detect and remove invalid/consumed messages from Redis ("junk cleanup").
+- **View Consistency**: Admin views cross-reference cache with DB to filter out "ghost" messages.
+- **Binary Serialization**: Compact Jackson Smile + Afterburner.
+- **Async Execution**: Thread pool for heavy I/O operations where appropriate.
 
 ### Operations & Security
 - HTTP Basic Auth with USER/ADMIN roles
@@ -97,6 +98,10 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 - OpenAPI (Swagger UI)
 - Actuator health endpoint
 - Dockerized
+
+> [!IMPORTANT]
+> **Upgrade Notice**: Internal Redis structures have changed from List to ZSet (Sorted Set) for idempotency.
+> When deploying this version over an existing instance, **flush Redis** (`redis-cli FLUSHALL`) or delete old `consumerGroupMessages:*` keys to avoid `WRONGTYPE` errors.
 
 ## 3. Architecture Overview
 

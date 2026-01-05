@@ -4,24 +4,34 @@ import static com.al.lightq.LightQConstants.*;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 /**
  * Dead-Letter Queue (DLQ) operations.
  * <p>
- * Provides admin functionality to inspect recent failed deliveries and to
- * replay selected DLQ entries back into the main queue. Replay creates new
- * messages with fresh IDs and re-inserts them into both MongoDB (main
- * collection) and the cache for immediate availability.
+ * Central service for handling message failures and DLQ management. Key
+ * responsibilities:
+ * <ul>
+ * <li><b>Move to DLQ:</b> Atomically marks message as consumed in main queue
+ * and copies to DLQ collection.</li>
+ * <li><b>Inspect:</b> View recent DLQ entries including failure reasons.</li>
+ * <li><b>Replay:</b> Restore messages from DLQ to main queue (new ID, fresh
+ * state) for redelivery.</li>
+ * <li><b>Maintenance:</b> Ensures TTL indexes for DLQ collections.</li>
+ * </ul>
  * </p>
  */
 @Service
@@ -30,12 +40,13 @@ public class DlqService {
 	private static final Logger logger = LoggerFactory.getLogger(DlqService.class);
 
 	private final MongoTemplate mongoTemplate;
-	private final CacheService cacheService;
+	private final RedisQueueService redisQueueService;
 	private final LightQProperties lightQProperties;
 
-	public DlqService(MongoTemplate mongoTemplate, CacheService cacheService, LightQProperties lightQProperties) {
+	public DlqService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
+			LightQProperties lightQProperties) {
 		this.mongoTemplate = mongoTemplate;
-		this.cacheService = cacheService;
+		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 	}
 
@@ -106,7 +117,7 @@ public class DlqService {
 
 			// Save to main collection then push to cache
 			mongoTemplate.save(message, consumerGroup);
-			cacheService.addMessage(message);
+			redisQueueService.addMessage(message);
 
 			// Remove DLQ entry
 			mongoTemplate.remove(new Query(Criteria.where(ID).is(id)), dlqCollection);
@@ -116,5 +127,78 @@ public class DlqService {
 		}
 		logger.info("DLQ replay completed: group={}, requested={}, replayed={}", consumerGroup, ids.size(), count);
 		return count;
+	}
+
+	/**
+	 * Moves the given message to the Dead Letter Queue (DLQ) for the consumer
+	 * group.
+	 * <p>
+	 * Actions performed:
+	 * <ul>
+	 * <li>Ensures DLQ indexes if TTL is configured</li>
+	 * <li>Inserts a copy of the message into the DLQ collection with failure
+	 * metadata</li>
+	 * <li>Marks the original message as consumed to exclude it from future
+	 * reservation</li>
+	 * </ul>
+	 * </p>
+	 *
+	 * @param message
+	 *            the message to move to DLQ
+	 * @param consumerGroup
+	 *            source consumer group
+	 * @param reason
+	 *            reason for DLQ (e.g., "max-deliveries")
+	 */
+	public void moveToDlq(Message message, String consumerGroup, String reason) {
+		String dlqCollection = consumerGroup + lightQProperties.getDlqSuffix();
+
+		// ensure DLQ TTL index if configured
+		ensureDlqIndexes(dlqCollection);
+
+		// Insert copy into DLQ with failure metadata
+		Document doc = new Document();
+		doc.put(ID, message.getId());
+		doc.put(CONTENT, message.getContent());
+		doc.put(CONSUMER_GROUP, message.getConsumerGroup());
+		doc.put(CREATED_AT, message.getCreatedAt());
+		doc.put(CONSUMED, true);
+		doc.put(DELIVERY_COUNT, message.getDeliveryCount());
+		doc.put(LAST_DELIVERY_AT, message.getLastDeliveryAt());
+		doc.put(LAST_ERROR, message.getLastError());
+		doc.put(FAILED_AT, new Date());
+		doc.put(DLQ_REASON, reason);
+
+		mongoTemplate.insert(doc, dlqCollection);
+		logger.debug("DLQ insert: id={}, collection={}, reason={}", message.getId(), dlqCollection, reason);
+
+		// Mark original as consumed to exclude from future reservation
+		Query q = new Query(Criteria.where(ID).is(message.getId()));
+		Update u = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
+		mongoTemplate.updateFirst(q, u, Message.class, consumerGroup);
+		logger.info("DLQ move completed: id={}, group={}, reason={}", message.getId(), consumerGroup, reason);
+	}
+
+	/**
+	 * Ensures TTL index for the DLQ collection if a positive TTL is configured.
+	 * <p>
+	 * When enabled, documents in the DLQ will expire automatically after the
+	 * configured number of minutes. If TTL is null or non-positive, no TTL index is
+	 * created.
+	 * </p>
+	 *
+	 * @param dlqCollection
+	 *            the DLQ collection name (group + suffix)
+	 */
+	private void ensureDlqIndexes(String dlqCollection) {
+		Integer ttl = lightQProperties.getDlqTtlMinutes();
+		if (ttl != null && ttl > 0) {
+			logger.debug("Ensuring DLQ TTL index: collection={}, ttlMinutes={}", dlqCollection, ttl);
+			mongoTemplate.indexOps(dlqCollection)
+					.ensureIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(ttl, TimeUnit.MINUTES));
+			logger.debug("DLQ TTL index ensured: collection={}", dlqCollection);
+		} else {
+			logger.debug("DLQ TTL not configured or disabled; collection={}", dlqCollection);
+		}
 	}
 }

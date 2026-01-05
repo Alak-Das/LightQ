@@ -20,8 +20,15 @@ import org.springframework.stereotype.Service;
 /**
  * Service for viewing messages in the queue for a specific consumer group.
  * <p>
- * It retrieves messages from both cache and MongoDB, combines them, and applies
- * filtering and sorting.
+ * Retrieves messages from both Redis (cache) and MongoDB. Key responsibilities:
+ * <ul>
+ * <li>Merging cached messages with persistent messages.</li>
+ * <li><b>Consistency Check:</b> Cross-references cached IDs with MongoDB to
+ * filter out "ghost" messages (consumed in DB but lingering in cache).</li>
+ * <li>Self-healing: Removes invalid messages from Redis during view
+ * operations.</li>
+ * <li>Sorting by createdAt and applying limits.</li>
+ * </ul>
  * </p>
  */
 @Service
@@ -29,11 +36,11 @@ public class ViewMessageService {
 
 	private static final Logger logger = LoggerFactory.getLogger(ViewMessageService.class);
 	private final MongoTemplate mongoTemplate;
-	private final CacheService cacheService;
+	private final RedisQueueService redisQueueService;
 
-	public ViewMessageService(MongoTemplate mongoTemplate, CacheService cacheService) {
+	public ViewMessageService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService) {
 		this.mongoTemplate = mongoTemplate;
-		this.cacheService = cacheService;
+		this.redisQueueService = redisQueueService;
 	}
 
 	/**
@@ -75,12 +82,45 @@ public class ViewMessageService {
 					.with(Sort.by(Sort.Direction.ASC, CREATED_AT)).limit(limit);
 			List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
 			fromDb.sort(Comparator.comparing(Message::getCreatedAt));
-			logger.info("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
+			logger.debug("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
 			return fromDb;
 		}
 
 		// Cache-first for unconsumed or no filter
-		List<Message> cached = cacheService.viewMessages(consumerGroup, limit);
+		List<Message> cached = redisQueueService.viewMessages(consumerGroup, limit);
+
+		// Consistency Check: Verify cached messages are NOT actually consumed in DB
+		// Only perform this check if we care about unconsumed messages (consumedFlag ==
+		// false or null)
+		// and we have items in cache.
+		if (!cached.isEmpty() && (consumedFlag == null || Boolean.FALSE.equals(consumedFlag))) {
+			Set<String> cachedIds = cached.stream().map(Message::getId).collect(Collectors.toSet());
+
+			// Find IDs in this batch that are actually consumed in DB
+			Query checkQuery = new Query();
+			checkQuery.addCriteria(Criteria.where(ID).in(cachedIds));
+			checkQuery.addCriteria(Criteria.where(CONSUMED).is(true));
+			checkQuery.fields().include(ID); // Only need IDs
+
+			List<Message> ghosts = mongoTemplate.find(checkQuery, Message.class, consumerGroup);
+
+			if (!ghosts.isEmpty()) {
+				Set<String> ghostIds = ghosts.stream().map(Message::getId).collect(Collectors.toSet());
+				// Remove ghosts from cached list
+				cached = cached.stream().filter(m -> !ghostIds.contains(m.getId())).collect(Collectors.toList());
+
+				// Optional: Self-heal Redis asynchronously?
+				// For now just logging. PopMessageService handles active healing.
+				logger.warn(
+						"View Consistency: Found {} consumed messages lingering in cache for group {}. Filtering them out.",
+						ghosts.size(), consumerGroup);
+
+				for (Message ghost : ghosts) {
+					redisQueueService.removeOne(consumerGroup, ghost);
+				}
+			}
+		}
+
 		logger.debug("Cache returned {} {} messages for consumerGroup={}", cached.size(),
 				consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
 
@@ -88,7 +128,7 @@ public class ViewMessageService {
 			List<Message> result = new ArrayList<>(cached);
 			result.sort(Comparator.comparing(Message::getCreatedAt));
 			List<Message> limited = result.subList(0, Math.min(limit, result.size()));
-			logger.info("Returning {} {} messages for Consumer Group: {}", limited.size(),
+			logger.debug("Returning {} {} messages for Consumer Group: {}", limited.size(),
 					consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
 			return limited;
 		}

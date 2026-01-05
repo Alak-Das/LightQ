@@ -67,7 +67,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 			filterChain.doFilter(request, response);
 		} finally {
 			long tookMs = System.currentTimeMillis() - start;
-			logger.info("Completed {} {} -> status={} in {} ms", request.getMethod(), request.getRequestURI(),
+			logger.debug("Completed {} {} -> status={} in {} ms", request.getMethod(), request.getRequestURI(),
 					response.getStatus(), tookMs);
 			// Do not clear MDC here; tests assert MDC contents post-filter. MDC is cleared
 			// by test teardown.
