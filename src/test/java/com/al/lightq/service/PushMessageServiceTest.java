@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -31,12 +31,16 @@ class PushMessageServiceTest {
 	@Mock
 	private LightQProperties lightQProperties;
 
-	@InjectMocks
+	private SimpleMeterRegistry meterRegistry;
+
 	private PushMessageService pushMessageService;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
+		meterRegistry = new SimpleMeterRegistry();
+
+		pushMessageService = new PushMessageService(redisQueueService, lightQProperties, mongoTemplate, meterRegistry);
 		ReflectionTestUtils.setField(pushMessageService, "expireMinutes", 60L);
 
 		// Mock index operations to avoid NPE from mongoTemplate.indexOps(...)
@@ -62,6 +66,9 @@ class PushMessageServiceTest {
 		assertEquals(content, result.getContent());
 		assertEquals(consumerGroup, result.getConsumerGroup());
 		org.mockito.Mockito.verify(redisQueueService, org.mockito.Mockito.times(1)).addMessage(messageToPush);
+
+		// Verify metrics
+		assertEquals(1.0, meterRegistry.get("lightq.messages.pushed.total").counter().count());
 	}
 
 	@Test
@@ -82,5 +89,8 @@ class PushMessageServiceTest {
 		// Verify DB persist was called
 		org.mockito.Mockito.verify(mongoTemplate, org.mockito.Mockito.atLeastOnce()).insert(any(Message.class),
 				eq(consumerGroup));
+
+		// Verify metrics (still counted as pushed)
+		assertEquals(1.0, meterRegistry.get("lightq.messages.pushed.total").counter().count());
 	}
 }

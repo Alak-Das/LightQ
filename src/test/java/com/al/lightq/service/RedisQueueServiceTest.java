@@ -8,13 +8,13 @@ import static org.mockito.Mockito.*;
 import com.al.lightq.LightQConstants;
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.data.redis.core.DefaultTypedTuple;
@@ -34,7 +34,9 @@ class RedisQueueServiceTest {
 	@Mock
 	private ZSetOperations<String, Message> zSetOperations;
 
-	@InjectMocks
+	// Use real SimpleMeterRegistry for metrics testing
+	private SimpleMeterRegistry meterRegistry;
+
 	private RedisQueueService redisQueueService;
 
 	private static final String CONSUMER_GROUP = "testGroup";
@@ -44,8 +46,15 @@ class RedisQueueServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		ReflectionTestUtils.setField(redisQueueService, "redisCacheTtlMinutes", 60L);
+		meterRegistry = new SimpleMeterRegistry();
+
 		when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
+		when(lightQProperties.getCacheTtlMinutes()).thenReturn(30);
+		when(lightQProperties.getCacheMaxEntriesPerGroup()).thenReturn(100);
+
+		redisQueueService = new RedisQueueService(redisTemplate, lightQProperties, meterRegistry);
+		ReflectionTestUtils.setField(redisQueueService, "redisCacheTtlMinutes", 60L);
+
 		message = new Message("id1", CONSUMER_GROUP, "content1");
 	}
 
@@ -58,6 +67,9 @@ class RedisQueueServiceTest {
 
 		verify(redisTemplate, times(1))
 				.executePipelined(any(org.springframework.data.redis.core.SessionCallback.class));
+
+		// Verify gauge was created
+		assertNotNull(meterRegistry.find("lightq.queue.depth").gauge());
 	}
 
 	@Test
@@ -70,6 +82,9 @@ class RedisQueueServiceTest {
 		assertNotNull(result);
 		assertEquals(message.getId(), result.getId());
 		verify(zSetOperations, times(1)).popMin(eq(CACHE_KEY));
+
+		// Verify gauge was created
+		assertNotNull(meterRegistry.find("lightq.queue.depth").gauge());
 	}
 
 	@Test
@@ -93,11 +108,12 @@ class RedisQueueServiceTest {
 
 		assertNotNull(result);
 		assertEquals(2, result.size());
-		// Order depends on implementation of Set returned by Redis, here LinkedHashSet
-		// preserves insertion order
 		assertTrue(result.contains(message));
 		assertTrue(result.contains(message2));
 		verify(zSetOperations, times(1)).range(eq(CACHE_KEY), eq(0L), eq(9L));
+
+		// Verify gauge was created
+		assertNotNull(meterRegistry.find("lightq.queue.depth").gauge());
 	}
 
 	@Test
@@ -112,6 +128,9 @@ class RedisQueueServiceTest {
 		assertNotNull(result);
 		assertEquals(2, result.size());
 		verify(zSetOperations, times(1)).range(eq(CACHE_KEY), eq(0L), eq(-1L));
+
+		// Verify gauge was created
+		assertNotNull(meterRegistry.find("lightq.queue.depth").gauge());
 	}
 
 	@Test

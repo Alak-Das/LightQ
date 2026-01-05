@@ -42,12 +42,14 @@ public class DlqService {
 	private final MongoTemplate mongoTemplate;
 	private final RedisQueueService redisQueueService;
 	private final LightQProperties lightQProperties;
+	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
 	public DlqService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
-			LightQProperties lightQProperties) {
+			LightQProperties lightQProperties, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
 		this.mongoTemplate = mongoTemplate;
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
+		this.meterRegistry = meterRegistry;
 	}
 
 	/**
@@ -176,6 +178,10 @@ public class DlqService {
 		Query q = new Query(Criteria.where(ID).is(message.getId()));
 		Update u = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
 		mongoTemplate.updateFirst(q, u, Message.class, consumerGroup);
+
+		meterRegistry.counter("lightq.messages.dlq.total", "consumerGroup", consumerGroup, "reason", reason)
+				.increment();
+
 		logger.info("DLQ move completed: id={}, group={}, reason={}", message.getId(), consumerGroup, reason);
 	}
 

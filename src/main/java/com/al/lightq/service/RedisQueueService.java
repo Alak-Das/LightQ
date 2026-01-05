@@ -38,14 +38,30 @@ public class RedisQueueService {
 
 	private final RedisTemplate<String, Message> redisTemplate;
 	private final LightQProperties lightQProperties;
+	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+	private final java.util.concurrent.ConcurrentHashMap<String, Boolean> monitoredGroups = new java.util.concurrent.ConcurrentHashMap<>();
 
 	// For tests to override TTL via
 	// ReflectionTestUtils.setField("redisCacheTtlMinutes", ...)
 	private long redisCacheTtlMinutes;
 
-	public RedisQueueService(RedisTemplate<String, Message> redisTemplate, LightQProperties lightQProperties) {
+	public RedisQueueService(RedisTemplate<String, Message> redisTemplate, LightQProperties lightQProperties,
+			io.micrometer.core.instrument.MeterRegistry meterRegistry) {
 		this.redisTemplate = redisTemplate;
 		this.lightQProperties = lightQProperties;
+		this.meterRegistry = meterRegistry;
+	}
+
+	private void monitorGroup(String consumerGroup) {
+		if (monitoredGroups.putIfAbsent(consumerGroup, Boolean.TRUE) == null) {
+			String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags.of("consumerGroup",
+					consumerGroup);
+			meterRegistry.gauge("lightq.queue.depth", tags, redisTemplate, rt -> {
+				Long size = rt.opsForZSet().zCard(key);
+				return size != null ? size.doubleValue() : 0.0;
+			});
+		}
 	}
 
 	/**
@@ -55,6 +71,7 @@ public class RedisQueueService {
 	 *            the message to add
 	 */
 	public void addMessage(Message message) {
+		monitorGroup(message.getConsumerGroup());
 		String key = LightQConstants.CACHE_PREFIX + message.getConsumerGroup();
 		long ttlMinutes = (this.redisCacheTtlMinutes > 0)
 				? this.redisCacheTtlMinutes
@@ -75,22 +92,6 @@ public class RedisQueueService {
 				int maxCacheEntries = Math.max(1,
 						lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
 
-				// Keep only oldest N items (remove ones with highest rank, i.e. newest if over
-				// capacity)
-				// Actually ZREMRANGEBYRANK removes by index. 0 is lowest score.
-				// If we want to keep oldest (FIFO), we keep 0..N-1.
-				// So we remove from N to -1.
-				// Wait, if we want to keep most relevant? Usually cache keeps newest.
-				// But queue is FIFO. So we want to keep the oldest messages (lowest scores).
-				// New messages are added with current time (high score).
-				// So if we trim, we should remove the NEWEST (highest score) if over capacity?
-				// Typically queues drop oldest if full, but here cache is "front" of queue.
-				// If cache is full, we probably want to stop adding or drop newest.
-				// Actually, let's stick to simple "remove > N".
-				// Newest messages have highest rank.
-				// We want to keep 0..(max-1).
-				// So we remove max..-1.
-
 				zset.removeRange(key, maxCacheEntries, -1);
 
 				ops.expire(key, Duration.ofMinutes(ttlMinutes));
@@ -107,6 +108,7 @@ public class RedisQueueService {
 	 * @return the popped message, or null if no message was popped
 	 */
 	public Message popMessage(String consumerGroup) {
+		monitorGroup(consumerGroup);
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
 		TypedTuple<Message> poppedTuple = redisTemplate.opsForZSet().popMin(key);
 		Message popped = (poppedTuple != null) ? poppedTuple.getValue() : null;
@@ -127,6 +129,7 @@ public class RedisQueueService {
 	 * @return the list of messages
 	 */
 	public List<Message> viewMessages(String consumerGroup) {
+		monitorGroup(consumerGroup);
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
 		Set<Message> cachedObjects = redisTemplate.opsForZSet().range(key, 0, -1);
 		if (cachedObjects == null || cachedObjects.isEmpty()) {
@@ -148,6 +151,7 @@ public class RedisQueueService {
 	 * @return up to 'limit' messages from the head of the sorted set (lowest score)
 	 */
 	public List<Message> viewMessages(String consumerGroup, int limit) {
+		monitorGroup(consumerGroup);
 		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
 		int safeLimit = Math.max(1, limit);
 		// ZRANGE is 0-based inclusive. So to get N items, 0 to N-1.

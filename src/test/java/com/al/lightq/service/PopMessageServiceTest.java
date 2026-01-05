@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
@@ -14,7 +15,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
@@ -31,7 +31,6 @@ public class PopMessageServiceTest {
 	@Mock
 	private RedisQueueService redisQueueService;
 
-	@InjectMocks
 	private PopMessageService popMessageService;
 
 	@Mock
@@ -39,6 +38,8 @@ public class PopMessageServiceTest {
 
 	@Mock
 	private LightQProperties lightQProperties;
+
+	private SimpleMeterRegistry meterRegistry;
 
 	private String consumerGroup;
 	private Message message;
@@ -49,10 +50,15 @@ public class PopMessageServiceTest {
 		message = new Message("msg1", consumerGroup, "content",
 				Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant()), false);
 
+		meterRegistry = new SimpleMeterRegistry();
+
 		when(lightQProperties.getVisibilityTimeoutSeconds()).thenReturn(30);
 		when(lightQProperties.getMaxDeliveryAttempts()).thenReturn(5);
 		// Used by PopMessageService to compute cache scan window
 		when(lightQProperties.getMessageAllowedToFetch()).thenReturn(50);
+
+		popMessageService = new PopMessageService(mongoTemplate, redisQueueService, lightQProperties, dlqService,
+				meterRegistry);
 	}
 
 	@Test
@@ -81,6 +87,10 @@ public class PopMessageServiceTest {
 		verify(mongoTemplate, times(1))
 				.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class),
 						anyString());
+
+		// Verify metrics
+		assertEquals(1.0, meterRegistry.get("lightq.messages.popped.total").tag("source", "cache").counter().count());
+		assertNotNull(meterRegistry.find("lightq.pop.latency").timer());
 	}
 
 	@Test
@@ -106,6 +116,9 @@ public class PopMessageServiceTest {
 		verify(mongoTemplate, times(1))
 				.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class),
 						anyString());
+
+		// Verify metrics
+		assertEquals(1.0, meterRegistry.get("lightq.messages.popped.total").tag("source", "db").counter().count());
 	}
 
 	@Test
@@ -130,6 +143,9 @@ public class PopMessageServiceTest {
 		verify(mongoTemplate, times(1))
 				.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Message.class),
 						anyString());
+
+		// Verify timer recorded even on empty
+		assertNotNull(meterRegistry.find("lightq.pop.latency").timer());
 	}
 
 	@Test

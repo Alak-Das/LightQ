@@ -39,6 +39,7 @@ public class PushMessageService {
 	private final MongoTemplate mongoTemplate;
 	private final RedisQueueService redisQueueService;
 	private final LightQProperties lightQProperties;
+	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 	// Tracks which consumer groups have had indexes ensured (bounded to avoid
 	// memory growth)
 	private final Cache<String, Boolean> indexCache;
@@ -48,18 +49,13 @@ public class PushMessageService {
 	private long expireMinutes;
 
 	public PushMessageService(RedisQueueService redisQueueService, LightQProperties lightQProperties,
-			MongoTemplate mongoTemplate) {
+			MongoTemplate mongoTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.mongoTemplate = mongoTemplate;
+		this.meterRegistry = meterRegistry;
 		this.indexCache = Caffeine.newBuilder().maximumSize(lightQProperties.getIndexCacheMaxGroups())
 				.expireAfterAccess(java.time.Duration.ofMinutes(lightQProperties.getIndexCacheExpireMinutes())).build();
-		// Initialize indexOps for reuse, or use it directly in ensureConsumerGroupIndex
-		// But in this specific class logic, indexOps field was unused.
-		// However, I will keep it if it was intended, or remove the field if truly
-		// unused.
-		// The lint said field indexOps is not used. I will remove the field
-		// initialization.
 	}
 
 	/**
@@ -91,6 +87,8 @@ public class PushMessageService {
 			logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
 					message.getConsumerGroup());
 		}
+
+		meterRegistry.counter("lightq.messages.pushed.total", "consumerGroup", message.getConsumerGroup()).increment();
 
 		return message;
 	}

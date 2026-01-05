@@ -651,6 +651,22 @@ Returns application status and dependency checks (Redis, MongoDB). This endpoint
 
 Runtime log level may be adjusted via Actuator if enabled for loggers.
 
+### Metrics (Prometheus)
+LightQ exposes application metrics at `/actuator/prometheus` for scraping.
+
+| Metric | Type | Description | Tags |
+|--------|------|-------------|------|
+| `lightq.messages.pushed.total` | Counter | Total messages pushed | `consumerGroup` |
+| `lightq.messages.popped.total` | Counter | Total messages popped | `consumerGroup`, `source` (cache/db) |
+| `lightq.messages.dlq.total` | Counter | Messages moved to DLQ | `consumerGroup`, `reason` |
+| `lightq.pop.latency` | Timer | Latency of pop operations | `consumerGroup` |
+| `lightq.queue.depth` | Gauge | Current Redis ZSet size | `consumerGroup` |
+
+### Monitoring Stack
+The Docker Compose setup includes a pre-configured monitoring stack:
+- **Prometheus**: Scrapes metrics every 5s.
+- **Grafana**: Pre-provisioned dashboards for queue depth, throughput, and latency.
+
 ## 13. Testing
 
 JUnit 5 and Mockito tests cover:
@@ -667,15 +683,24 @@ mvn test
 ## 14. Docker Deployment
 
 See docker-compose.yml for production-ready stack:
-- lightq-service
-- mongodb (+ healthcheck)
-- redis (+ healthcheck)
+- **lightq-service**: The Core API
+- **mongodb**: Data store (+ healthcheck)
+- **redis**: Cache (+ healthcheck)
+- **prometheus**: Metric collection (Port 9090)
+- **grafana**: Metric visualization (Port 3000)
 
 Quick start:
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
+
+### Access Points
+- **API**: http://localhost:8080/queue
+- **Swagger UI**: http://localhost:8080/swagger-ui/index.html
+- **Grafana**: http://localhost:3000 (Login: `admin`/`admin`)
+  - Go to **Dashboards** -> **LightQ Dashboard** to view real-time metrics.
+- **Prometheus**: http://localhost:9090
 
 Notes:
 - The service container uses MONGO_URI with authSource=admin to connect to the MongoDB service.

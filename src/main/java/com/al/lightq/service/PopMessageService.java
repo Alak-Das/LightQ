@@ -41,13 +41,16 @@ public class PopMessageService {
 	private final RedisQueueService redisQueueService;
 	private final DlqService dlqService;
 	private final LightQProperties lightQProperties;
+	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
 	public PopMessageService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
-			LightQProperties lightQProperties, DlqService dlqService) {
+			LightQProperties lightQProperties, DlqService dlqService,
+			io.micrometer.core.instrument.MeterRegistry meterRegistry) {
 		this.mongoTemplate = mongoTemplate;
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.dlqService = dlqService;
+		this.meterRegistry = meterRegistry;
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(PopMessageService.class);
@@ -66,60 +69,62 @@ public class PopMessageService {
 	 *         message is available.
 	 */
 	public Optional<Message> pop(String consumerGroup) {
-		logger.debug("Attempting to reserve oldest message for Consumer Group: {}", consumerGroup);
+		return io.micrometer.core.instrument.Timer.builder("lightq.pop.latency").tag("consumerGroup", consumerGroup)
+				.register(meterRegistry).record(() -> {
+					logger.debug("Attempting to reserve oldest message for Consumer Group: {}", consumerGroup);
 
-		int maxAttempts = lightQProperties.getMaxDeliveryAttempts();
+					int maxAttempts = lightQProperties.getMaxDeliveryAttempts();
 
-		// Try reserving from cache candidates using a non-destructive peek, then
-		// conditionally remove from cache after successful DB reservation.
-		int scanWindow = Math.min(10, lightQProperties.getMessageAllowedToFetch());
-		java.util.List<Message> candidates = redisQueueService.viewMessages(consumerGroup, scanWindow);
-		for (Message candidate : candidates) {
-			if (candidate == null) {
-				continue;
-			}
-			Optional<Message> reservedOpt = reserveById(candidate.getId(), consumerGroup);
-			if (reservedOpt.isPresent()) {
-				Message reserved = reservedOpt.get();
-				if (reserved.getDeliveryCount() > maxAttempts) {
-					logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
-							reserved.getId(), maxAttempts, consumerGroup);
-					dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
-					// do not remove the candidate from cache on DLQ move
-					// (it will age out by TTL and subsequent cache views will skip it)
-					continue;
-				}
-				// Reservation succeeded, remove exactly one occurrence from cache list
-				redisQueueService.removeOne(consumerGroup, candidate);
-				logger.debug("Reserved message {} from cache for group {} with deliveryCount {}", reserved.getId(),
-						consumerGroup, reserved.getDeliveryCount());
-				return Optional.of(reserved);
-			}
+					// Try reserving from cache candidates
+					int scanWindow = Math.min(10, lightQProperties.getMessageAllowedToFetch());
+					java.util.List<Message> candidates = redisQueueService.viewMessages(consumerGroup, scanWindow);
+					for (Message candidate : candidates) {
+						if (candidate == null) {
+							continue;
+						}
+						Optional<Message> reservedOpt = reserveById(candidate.getId(), consumerGroup);
+						if (reservedOpt.isPresent()) {
+							Message reserved = reservedOpt.get();
+							if (reserved.getDeliveryCount() > maxAttempts) {
+								logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
+										reserved.getId(), maxAttempts, consumerGroup);
+								dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
+								continue;
+							}
+							redisQueueService.removeOne(consumerGroup, candidate);
+							logger.debug("Reserved message {} from cache for group {} with deliveryCount {}",
+									reserved.getId(), consumerGroup, reserved.getDeliveryCount());
 
-			// SELF-HEALING: If reservation failed, check if it's because the message is
-			// invalid/consumed.
-			// If so, remove from Redis to clean up "junk".
-			cleanupIfInvalid(candidate, consumerGroup);
-		}
+							meterRegistry.counter("lightq.messages.popped.total", "consumerGroup", consumerGroup,
+									"source", "cache").increment();
+							return Optional.of(reserved);
+						}
+						cleanupIfInvalid(candidate, consumerGroup);
+					}
 
-		// Fallback to DB-only reservation
-		Optional<Message> dbReserved = reserveOldestAvailable(consumerGroup);
-		while (dbReserved.isPresent()) {
-			Message reserved = dbReserved.get();
-			if (reserved.getDeliveryCount() > maxAttempts) {
-				logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
-						reserved.getId(), maxAttempts, consumerGroup);
-				dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
-				dbReserved = reserveOldestAvailable(consumerGroup);
-				continue;
-			}
-			logger.debug("Reserved message {} from DB for group {} with deliveryCount {}", reserved.getId(),
-					consumerGroup, reserved.getDeliveryCount());
-			return Optional.of(reserved);
-		}
+					// Fallback to DB-only reservation
+					Optional<Message> dbReserved = reserveOldestAvailable(consumerGroup);
+					while (dbReserved.isPresent()) {
+						Message reserved = dbReserved.get();
+						if (reserved.getDeliveryCount() > maxAttempts) {
+							logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
+									reserved.getId(), maxAttempts, consumerGroup);
+							dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
+							dbReserved = reserveOldestAvailable(consumerGroup);
+							continue;
+						}
+						logger.debug("Reserved message {} from DB for group {} with deliveryCount {}", reserved.getId(),
+								consumerGroup, reserved.getDeliveryCount());
 
-		logger.debug("No reservable message found for Consumer Group: {}", consumerGroup);
-		return Optional.empty();
+						meterRegistry
+								.counter("lightq.messages.popped.total", "consumerGroup", consumerGroup, "source", "db")
+								.increment();
+						return Optional.of(reserved);
+					}
+
+					logger.debug("No reservable message found for Consumer Group: {}", consumerGroup);
+					return Optional.empty();
+				});
 	}
 
 	/**
