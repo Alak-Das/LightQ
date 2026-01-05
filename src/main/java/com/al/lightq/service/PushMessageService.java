@@ -3,6 +3,7 @@ package com.al.lightq.service;
 import static com.al.lightq.LightQConstants.CONSUMED;
 import static com.al.lightq.LightQConstants.CREATED_AT;
 import static com.al.lightq.LightQConstants.RESERVED_UNTIL;
+import static com.al.lightq.LightQConstants.SCHEDULED_AT;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
@@ -71,7 +72,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            The {@link Message} object to be pushed.
+	 *                The {@link Message} object to be pushed.
 	 * @return The {@link Message} that was pushed.
 	 */
 	public Message push(Message message) {
@@ -122,7 +123,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            the message to persist
+	 *                the message to persist
 	 */
 	private void persistToMongo(Message message) {
 		createTTLIndex(message);
@@ -139,7 +140,7 @@ public class PushMessageService {
 	 * persists asynchronously to MongoDB grouped by consumerGroup.
 	 *
 	 * @param messages
-	 *            messages to push; null/empty list is a no-op
+	 *                 messages to push; null/empty list is a no-op
 	 * @return the input messages for convenience
 	 */
 	public List<Message> pushBatch(List<Message> messages) {
@@ -178,7 +179,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param messages
-	 *            the messages to persist; null/empty list is ignored
+	 *                 the messages to persist; null/empty list is ignored
 	 */
 	private void persistToMongoBatch(List<Message> messages) {
 		try {
@@ -215,7 +216,7 @@ public class PushMessageService {
 	 * Inserts a single message with bounded retry and exponential backoff.
 	 *
 	 * @param message
-	 *            the message to insert
+	 *                the message to insert
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -249,9 +250,9 @@ public class PushMessageService {
 	 * exponential backoff.
 	 *
 	 * @param groupMsgs
-	 *            the messages to insert
+	 *                   the messages to insert
 	 * @param collection
-	 *            the MongoDB collection (consumer group) name
+	 *                   the MongoDB collection (consumer group) name
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -290,8 +291,8 @@ public class PushMessageService {
 	 * via expireMinutes.
 	 *
 	 * @param message
-	 *            The {@link Message} providing the target consumer group
-	 *            (collection)
+	 *                The {@link Message} providing the target consumer group
+	 *                (collection)
 	 */
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();
@@ -306,10 +307,12 @@ public class PushMessageService {
 					.createIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(minutes, TimeUnit.MINUTES)
 							.partial(org.springframework.data.mongodb.core.index.PartialIndexFilter.of(
 									org.springframework.data.mongodb.core.query.Criteria.where(CONSUMED).is(true))));
-			// Compound index to speed up read path: { consumed: 1, reservedUntil: 1,
-			// createdAt: 1 }
+			// Compound index to speed up read path: { consumed: 1, createdAt: 1,
+			// reservedUntil: 1, scheduledAt: 1 }
+			// Optimized for ESR rule (Equality, Sort, Range)
 			mongoTemplate.indexOps(collection).createIndex(new Index().on(CONSUMED, Sort.Direction.ASC)
-					.on(RESERVED_UNTIL, Sort.Direction.ASC).on(CREATED_AT, Sort.Direction.ASC));
+					.on(CREATED_AT, Sort.Direction.ASC).on(RESERVED_UNTIL, Sort.Direction.ASC)
+					.on(SCHEDULED_AT, Sort.Direction.ASC));
 			logger.debug("Indexes ensured for collection: {}", collection);
 			return Boolean.TRUE;
 		});

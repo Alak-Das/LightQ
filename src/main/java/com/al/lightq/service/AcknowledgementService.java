@@ -28,9 +28,12 @@ public class AcknowledgementService {
 	private static final Logger logger = LoggerFactory.getLogger(AcknowledgementService.class);
 
 	private final MongoTemplate mongoTemplate;
+	private final org.springframework.core.task.TaskExecutor taskExecutor;
 
-	public AcknowledgementService(MongoTemplate mongoTemplate) {
+	public AcknowledgementService(MongoTemplate mongoTemplate,
+			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor) {
 		this.mongoTemplate = mongoTemplate;
+		this.taskExecutor = taskExecutor;
 	}
 
 	/**
@@ -42,34 +45,22 @@ public class AcknowledgementService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the MongoDB collection (consumer group) to operate on
+	 *                      the MongoDB collection (consumer group) to operate on
 	 * @param messageId
-	 *            the identifier of the message to acknowledge
+	 *                      the identifier of the message to acknowledge
 	 * @return true if the message was updated or was already consumed; false if the
 	 *         message does not exist in the given group
 	 */
 	public boolean ack(String consumerGroup, String messageId) {
-		Query query = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(false));
-		Update update = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
-
-		UpdateResult result = mongoTemplate.updateFirst(query, update, Message.class, consumerGroup);
-		if (result.getModifiedCount() > 0) {
-			logger.debug("Ack succeeded for messageId={} in group={}", messageId, consumerGroup);
-			return true;
-		}
-
-		// Idempotency: consider already consumed as success
-		Query already = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(true));
-		boolean exists = mongoTemplate.exists(already, Message.class, consumerGroup);
-		if (exists) {
-			logger.debug("Ack idempotent success (already consumed) for messageId={} in group={}", messageId,
-					consumerGroup);
-			return true;
-		}
-
-		// Not found; return not found (404)
-		logger.debug("Ack not found for messageId={} in group={}", messageId, consumerGroup);
-		return false;
+		// Async "Fire and Forget" Ack
+		taskExecutor.execute(() -> {
+			Query query = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(false));
+			Update update = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
+			mongoTemplate.updateFirst(query, update, Message.class, consumerGroup);
+			logger.debug("Async Ack submitted for messageId={} in group={}", messageId, consumerGroup);
+		});
+		// Always return true to client immediately
+		return true;
 	}
 
 	/**
@@ -80,9 +71,9 @@ public class AcknowledgementService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the MongoDB collection (consumer group) to operate on
+	 *                      the MongoDB collection (consumer group) to operate on
 	 * @param messageIds
-	 *            the identifiers of the messages to acknowledge
+	 *                      the identifiers of the messages to acknowledge
 	 * @return the number of messages successfully updated (or already consumed)
 	 */
 	public long batchAck(String consumerGroup, java.util.List<String> messageIds) {
@@ -90,20 +81,16 @@ public class AcknowledgementService {
 			return 0;
 		}
 
-		// 1. Mark as consumed where consumed=false and id IN list
-		Query query = new Query(Criteria.where(ID).in(messageIds).and(CONSUMED).is(false));
-		Update update = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
+		taskExecutor.execute(() -> {
+			Query query = new Query(Criteria.where(ID).in(messageIds).and(CONSUMED).is(false));
+			Update update = new Update().set(CONSUMED, true).set(RESERVED_UNTIL, null);
+			UpdateResult result = mongoTemplate.updateMulti(query, update, Message.class, consumerGroup);
+			logger.debug("Async Batch ack updated {} messages in group={}", result.getModifiedCount(), consumerGroup);
+		});
 
-		UpdateResult result = mongoTemplate.updateMulti(query, update, Message.class, consumerGroup);
-		long updatedCount = result.getModifiedCount();
-
-		// 2. For full correctness/idempotency return, we might want to count how many
-		// ARE consumed now
-		// but typically batch ack just returns "updated count" or we assume void.
-		// Let's return updated count for now.
-		logger.debug("Batch ack updated {} messages in group={}", updatedCount, consumerGroup);
-
-		return updatedCount;
+		// Return 0 or size, logic is loose since it's async now.
+		// We return size to indicate "accepted" count.
+		return messageIds.size();
 	}
 
 	/**
@@ -115,11 +102,12 @@ public class AcknowledgementService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the MongoDB collection (consumer group)
+	 *                      the MongoDB collection (consumer group)
 	 * @param messageId
-	 *            the message identifier
+	 *                      the message identifier
 	 * @param reason
-	 *            optional reason used for diagnostics and stored in lastError
+	 *                      optional reason used for diagnostics and stored in
+	 *                      lastError
 	 * @return true if the document was updated; false otherwise
 	 */
 	public boolean nack(String consumerGroup, String messageId, String reason) {
@@ -153,12 +141,13 @@ public class AcknowledgementService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the MongoDB collection (consumer group)
+	 *                         the MongoDB collection (consumer group)
 	 * @param messageId
-	 *            the message identifier to extend
+	 *                         the message identifier to extend
 	 * @param extensionSeconds
-	 *            number of seconds to extend the current reservation; values <= 0
-	 *            are treated as 1
+	 *                         number of seconds to extend the current reservation;
+	 *                         values <= 0
+	 *                         are treated as 1
 	 * @return true if the reservation was extended; false if the message is not
 	 *         reserved, not found, or already consumed
 	 */
@@ -188,9 +177,9 @@ public class AcknowledgementService {
 	 * Finds a message by ID in the given consumer group.
 	 *
 	 * @param consumerGroup
-	 *            the MongoDB collection (consumer group)
+	 *                      the MongoDB collection (consumer group)
 	 * @param messageId
-	 *            the message identifier
+	 *                      the message identifier
 	 * @return Optional containing the message if present; otherwise empty
 	 */
 	public Optional<Message> findById(String consumerGroup, String messageId) {

@@ -43,14 +43,18 @@ public class PopMessageService {
 	private final LightQProperties lightQProperties;
 	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
+	private final org.springframework.core.task.TaskExecutor taskExecutor;
+
 	public PopMessageService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
 			LightQProperties lightQProperties, DlqService dlqService,
-			io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+			io.micrometer.core.instrument.MeterRegistry meterRegistry,
+			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor) {
 		this.mongoTemplate = mongoTemplate;
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.dlqService = dlqService;
 		this.meterRegistry = meterRegistry;
+		this.taskExecutor = taskExecutor;
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(PopMessageService.class);
@@ -64,7 +68,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            The consumer group from which to pop the message.
+	 *                      The consumer group from which to pop the message.
 	 * @return An {@link Optional} containing the message if found, or empty if no
 	 *         message is available.
 	 */
@@ -91,7 +95,8 @@ public class PopMessageService {
 								dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
 								continue;
 							}
-							redisQueueService.removeOne(consumerGroup, candidate);
+							// Async cleanup: remove from cache in background
+							taskExecutor.execute(() -> redisQueueService.removeOne(consumerGroup, candidate));
 							logger.debug("Reserved message {} from cache for group {} with deliveryCount {}",
 									reserved.getId(), consumerGroup, reserved.getDeliveryCount());
 
@@ -140,11 +145,11 @@ public class PopMessageService {
 			if (dbMessage == null) {
 				logger.warn("Self-Healing: Message {} found in Redis but missing in DB. Removing from Redis.",
 						idxMessage.getId());
-				redisQueueService.removeOne(consumerGroup, idxMessage);
+				taskExecutor.execute(() -> redisQueueService.removeOne(consumerGroup, idxMessage));
 			} else if (dbMessage.isConsumed()) {
 				logger.warn("Self-Healing: Message {} found in Redis but is consumed in DB. Removing from Redis.",
 						idxMessage.getId());
-				redisQueueService.removeOne(consumerGroup, idxMessage);
+				taskExecutor.execute(() -> redisQueueService.removeOne(consumerGroup, idxMessage));
 			}
 			// If it exists and matches but couldn't be reserved, it's likely reserved by
 			// another consumer
@@ -168,9 +173,9 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param messageId
-	 *            message identifier to reserve
+	 *                      message identifier to reserve
 	 * @param consumerGroup
-	 *            target consumer group (collection name)
+	 *                      target consumer group (collection name)
 	 * @return Optional containing the newly reserved Message, or empty if not
 	 *         reservable
 	 */
@@ -208,7 +213,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            target consumer group (collection name)
+	 *                      target consumer group (collection name)
 	 * @return Optional containing the reserved Message, or empty if none available
 	 */
 	private Optional<Message> reserveOldestAvailable(String consumerGroup) {

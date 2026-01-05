@@ -40,6 +40,9 @@ public class PopMessageServiceTest {
 	@Mock
 	private LightQProperties lightQProperties;
 
+	@Mock
+	private org.springframework.core.task.TaskExecutor taskExecutor;
+
 	private SimpleMeterRegistry meterRegistry;
 
 	private String consumerGroup;
@@ -59,7 +62,7 @@ public class PopMessageServiceTest {
 		lenient().when(lightQProperties.getMessageAllowedToFetch()).thenReturn(50);
 
 		popMessageService = new PopMessageService(mongoTemplate, redisQueueService, lightQProperties, dlqService,
-				meterRegistry);
+				meterRegistry, taskExecutor);
 	}
 
 	@Test
