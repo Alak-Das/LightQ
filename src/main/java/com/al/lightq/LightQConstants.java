@@ -58,12 +58,6 @@ public final class LightQConstants {
 	public static final String FAILED_AT = "failedAt";
 	public static final String SCHEDULED_AT = "scheduledAt";
 
-	// Async executor configuration
-	public static final int CORE_POOL_SIZE = 5;
-	public static final int MAX_POOL_SIZE = 10;
-	public static final int QUEUE_CAPACITY = 25;
-	public static final String THREAD_NAME_PREFIX = "DBDataUpdater-";
-
 	// Validation and error messages
 	public static final String EMPTY_MESSAGE_CONTENT_MESSAGE = "Message content cannot be empty";
 	public static final String INVALID_CONSUMED_FILTER_MESSAGE = "Invalid consumed filter value received: {}. Expected 'yes' or 'no'. Ignoring filter.";

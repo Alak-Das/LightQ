@@ -67,13 +67,15 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            The {@link Message} object to be pushed.
+	 *                The {@link Message} object to be pushed.
 	 * @return The {@link Message} that was pushed.
 	 */
 	public Message push(Message message) {
-		int contentLength = message.getContent() != null ? message.getContent().length() : 0;
-		logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
-				message.getConsumerGroup(), contentLength);
+		if (logger.isDebugEnabled()) {
+			int contentLength = message.getContent() != null ? message.getContent().length() : 0;
+			logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
+					message.getConsumerGroup(), contentLength);
+		}
 
 		// Persist to MongoDB FIRST (Synchronous) for durability
 		persistToMongo(message);
@@ -102,7 +104,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            the message to persist
+	 *                the message to persist
 	 */
 	private void persistToMongo(Message message) {
 		createTTLIndex(message);
@@ -119,7 +121,7 @@ public class PushMessageService {
 	 * persists asynchronously to MongoDB grouped by consumerGroup.
 	 *
 	 * @param messages
-	 *            messages to push; null/empty list is a no-op
+	 *                 messages to push; null/empty list is a no-op
 	 * @return the input messages for convenience
 	 */
 	public List<Message> pushBatch(List<Message> messages) {
@@ -158,7 +160,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param messages
-	 *            the messages to persist; null/empty list is ignored
+	 *                 the messages to persist; null/empty list is ignored
 	 */
 	private void persistToMongoBatch(List<Message> messages) {
 		try {
@@ -195,7 +197,7 @@ public class PushMessageService {
 	 * Inserts a single message with bounded retry and exponential backoff.
 	 *
 	 * @param message
-	 *            the message to insert
+	 *                the message to insert
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -229,9 +231,9 @@ public class PushMessageService {
 	 * exponential backoff.
 	 *
 	 * @param groupMsgs
-	 *            the messages to insert
+	 *                   the messages to insert
 	 * @param collection
-	 *            the MongoDB collection (consumer group) name
+	 *                   the MongoDB collection (consumer group) name
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -270,8 +272,8 @@ public class PushMessageService {
 	 * via expireMinutes.
 	 *
 	 * @param message
-	 *            The {@link Message} providing the target consumer group
-	 *            (collection)
+	 *                The {@link Message} providing the target consumer group
+	 *                (collection)
 	 */
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();

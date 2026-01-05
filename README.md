@@ -341,12 +341,12 @@ Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If uns
 | LIGHTQ_DLQ_TTL_MINUTES | (unset) | TTL for DLQ collection; unset disables |
 
 ### 8.7 Thread Pool
-- CORE_POOL_SIZE=5
-- MAX_POOL_SIZE=10
-- QUEUE_CAPACITY=25
+- CORE_POOL_SIZE=20
+- MAX_POOL_SIZE=50
+- QUEUE_CAPACITY=500
 - THREAD_NAME_PREFIX=DBDataUpdater-
 - ALLOW_CORE_THREAD_TIMEOUT=true
-- AWAIT_TERMINATION_SECONDS=30
+- AWAIT_TERMINATION_SECONDS=60
 
 ### 8.8 Redis Client Tuning
 | Variable | Default | Description |
@@ -360,7 +360,7 @@ Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If uns
 ### 8.9 Cache/Index Bounds
 | Variable | Default | Description |
 |----------|---------|-------------|
-| LIGHTQ_CACHE_MAX_ENTRIES_PER_GROUP | 100 | Max cached entries per consumer group (affects Redis LTRIM window) |
+| LIGHTQ_CACHE_MAX_ENTRIES_PER_GROUP | 10000 | Max cached entries per consumer group (affects Redis LTRIM window) |
 | LIGHTQ_INDEX_CACHE_MAX_GROUPS | 1000 | Max groups tracked for ensured MongoDB indexes |
 | LIGHTQ_INDEX_CACHE_EXPIRE_MINUTES | 60 | Expiration (minutes) for index-tracking cache entries |
 
