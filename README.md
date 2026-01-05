@@ -662,20 +662,32 @@ LightQ exposes application metrics at `/actuator/prometheus` for scraping.
 | `lightq.pop.latency` | Timer | Latency of pop operations | `consumerGroup` |
 | `lightq.queue.depth` | Gauge | Current Redis ZSet size | `consumerGroup` |
 
+Additional System & Performance Metrics:
+- **JVM**: Memory (Heap/Non-Heap), GC Pauses
+- **System**: CPU Usage (Process vs System)
+- **Database**: MongoDB Driver Latency & Throughput
+- **Application**: HTTP Request Rate, Latency, and Thread Pool Saturation
+
 ### Monitoring Stack
 The Docker Compose setup includes a pre-configured monitoring stack:
-- **Prometheus**: Scrapes metrics every 5s.
-- **Grafana**: Pre-provisioned dashboards for queue depth, throughput, and latency.
+- **Prometheus**: Scrapes metrics every 5s. Configured with Basic Auth to access the secured application endpoint.
+- **Grafana**: Pre-provisioned "LightQ Dashboard" visualizing all the above metrics (Queue, System, DB, App).
 
 ## 13. Testing
 
+### Unit Tests
 JUnit 5 and Mockito tests cover:
 - Config (Async, Security, Redis, RateLimiting)
 - Controller (MessageController)
 - Services (Push/Pop/View/Cache, Acknowledgement)
 - Exceptions (Global handler)
 
-Run:
+### Integration Tests
+Uses **Testcontainers** to verify behavior against real MongoDB and Redis instances.
+- `PushFlowIntegrationTest`: Full lifecycle of a push operation.
+- `PopFlowIntegrationTest`: Verification of reservation, DB persistence, and cache fallback.
+
+Run all tests:
 ```bash
 mvn test
 ```
