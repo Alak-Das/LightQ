@@ -61,5 +61,26 @@ class PushMessageServiceTest {
 		assertNotNull(result);
 		assertEquals(content, result.getContent());
 		assertEquals(consumerGroup, result.getConsumerGroup());
+		org.mockito.Mockito.verify(cacheService, org.mockito.Mockito.times(1)).addMessage(messageToPush);
+	}
+
+	@Test
+	void pushScheduled_shouldSkipCache() {
+		String consumerGroup = "testGroup";
+		String content = "testContent";
+		java.util.Date future = new java.util.Date(System.currentTimeMillis() + 10000);
+		Message messageToPush = new Message("testId", consumerGroup, content, future);
+
+		// Mock insert into MongoTemplate (non-void)
+		when(mongoTemplate.insert(any(Message.class), eq(consumerGroup))).thenReturn(messageToPush);
+
+		Message result = pushMessageService.push(messageToPush);
+		assertNotNull(result);
+
+		// Verify verify cache was skipped
+		org.mockito.Mockito.verify(cacheService, org.mockito.Mockito.never()).addMessage(any(Message.class));
+		// Verify DB persist was called
+		org.mockito.Mockito.verify(mongoTemplate, org.mockito.Mockito.atLeastOnce()).insert(any(Message.class),
+				eq(consumerGroup));
 	}
 }

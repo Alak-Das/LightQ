@@ -10,7 +10,7 @@
       "listen": "prerequest",
       "script": {
         "type": "text/javascript",
-          "exec": [
+        "exec": [
           "// Generate a fresh correlation/request id for every request",
           "const reqId = pm.variables.replaceIn('{{$randomUUID}}');",
           "try { pm.environment.set('requestId', reqId); } catch (e) {}",
@@ -34,8 +34,14 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/actuator/health"
           },
@@ -57,12 +63,182 @@
       ]
     },
     {
+      "name": "Delayed Delivery",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          {
+            "key": "username",
+            "value": "{{userUser}}",
+            "type": "string"
+          },
+          {
+            "key": "password",
+            "value": "{{userPass}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST /queue/push (scheduled +5s)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-delayed"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "scheduledAt",
+                "value": "{{futureTime}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "Delayed Message Content"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Set futureTime to 5 seconds from now ISO8601",
+                  "const future = new Date(Date.now() + 5000);",
+                  "pm.environment.set('futureTime', future.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('delayedMessageId', json.id);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (immediate -> 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-delayed"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 (not visible yet)', () => pm.response.code === 404);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wait 6s",
+          "request": {
+            "method": "GET",
+            "url": "https://postman-echo.com/delay/6"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Waited 6s', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (after delay -> 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-delayed"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Is the delayed message', () => json.id === pm.environment.get('delayedMessageId'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "User Endpoints (role USER)",
       "auth": {
         "type": "basic",
         "basic": [
-          { "key": "username", "value": "{{userUser}}", "type": "string" },
-          { "key": "password", "value": "{{userPass}}", "type": "string" }
+          {
+            "key": "username",
+            "value": "{{userUser}}",
+            "type": "string"
+          },
+          {
+            "key": "password",
+            "value": "{{userPass}}",
+            "type": "string"
+          }
         ]
       },
       "item": [
@@ -71,12 +247,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{{messageContent}}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{{messageContent}}"
+            },
             "url": "{{baseUrl}}/queue/push"
           },
           "event": [
@@ -101,9 +292,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/pop"
           },
@@ -128,9 +328,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/extend-visibility?id={{messageId}}&seconds=30"
           },
@@ -152,9 +361,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/ack?id={{messageId}}"
           },
@@ -176,9 +394,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/pop"
           },
@@ -200,12 +427,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{{messageContent2}}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{{messageContent2}}"
+            },
             "url": "{{baseUrl}}/queue/push"
           },
           "event": [
@@ -227,9 +469,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/pop"
           },
@@ -253,9 +504,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/nack?id={{messageId2}}&reason=test-nack"
           },
@@ -277,9 +537,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/pop"
           },
@@ -303,9 +572,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/extend-visibility?id={{messageId2}}&seconds=-1"
           },
@@ -327,9 +605,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/ack?id=non-existent-id"
           },
@@ -351,9 +638,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/nack?id=non-existent-id&reason=na"
           },
@@ -375,12 +671,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "bad group with spaces" },
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "bad group with spaces"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "content" },
+            "body": {
+              "mode": "raw",
+              "raw": "content"
+            },
             "url": "{{baseUrl}}/queue/push"
           },
           "event": [
@@ -401,12 +712,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "" },
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
             "url": "{{baseUrl}}/queue/push"
           },
           "event": [
@@ -430,8 +756,16 @@
       "auth": {
         "type": "basic",
         "basic": [
-          { "key": "username", "value": "{{adminUser}}", "type": "string" },
-          { "key": "password", "value": "{{adminPass}}", "type": "string" }
+          {
+            "key": "username",
+            "value": "{{adminUser}}",
+            "type": "string"
+          },
+          {
+            "key": "password",
+            "value": "{{adminPass}}",
+            "type": "string"
+          }
         ]
       },
       "item": [
@@ -440,9 +774,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/view"
           },
@@ -465,11 +808,26 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "messageCount", "value": "10" },
-              { "key": "consumed", "value": "no" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "messageCount",
+                "value": "10"
+              },
+              {
+                "key": "consumed",
+                "value": "no"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/view"
           },
@@ -492,10 +850,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "consumed", "value": "maybe" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "consumed",
+                "value": "maybe"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/view"
           },
@@ -518,9 +888,18 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/dlq/view?limit=5"
           },
@@ -543,10 +922,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -578,15 +969,32 @@
         {
           "name": "Unauthorized: POST /queue/push (no auth -> 401)",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "content" },
+            "body": {
+              "mode": "raw",
+              "raw": "content"
+            },
             "url": "{{baseUrl}}/queue/push"
           },
           "event": [
@@ -608,15 +1016,32 @@
             "auth": {
               "type": "basic",
               "basic": [
-                { "key": "username", "value": "{{userUser}}", "type": "string" },
-                { "key": "password", "value": "{{userPass}}", "type": "string" }
+                {
+                  "key": "username",
+                  "value": "{{userUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{userPass}}",
+                  "type": "string"
+                }
               ]
             },
             "method": "GET",
             "header": [
-              { "key": "consumerGroup", "value": "{{consumerGroup}}" },
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/queue/view"
           },
@@ -644,8 +1069,14 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "X-Request-Id", "value": "{{requestId}}" },
-              { "key": "X-Correlation-Id", "value": "{{requestId}}" }
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
             ],
             "url": "{{baseUrl}}/actuator/health"
           },

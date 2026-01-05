@@ -69,6 +69,7 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 
 ### Core
 - Push: Enqueue message to a consumer group
+- Scheduled Push: Enqueue message to become visible at a future time
 - Batch Push: Efficient bulk enqueue with pipelined variadic LPUSH and async bulk inserts
 - Pop (Reserve): Reserve oldest available message with a visibility timeout
 - Ack/Nack: Explicit acknowledgement to complete or re-queue
@@ -384,6 +385,7 @@ OpenAPI:
 
 Common headers
 - consumerGroup (required for all endpoints): 1-50 chars, alphanumeric, hyphens, underscores
+- scheduledAt (optional for push): ISO-8601 date-time string (e.g. 2023-10-01T12:00:00Z)
 - messageCount (optional for view)
 - consumed (optional for view): yes|no
 
@@ -399,6 +401,16 @@ Content-Type: text/plain
 consumerGroup: my-group
 
 Hello, World!
+```
+
+Request (Scheduled)
+```http
+POST /queue/push
+Content-Type: text/plain
+consumerGroup: my-group
+scheduledAt: 2025-01-01T12:00:00Z
+
+Future Message
 ```
 
 cURL

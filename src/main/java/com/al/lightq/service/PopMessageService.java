@@ -55,7 +55,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            The consumer group from which to pop the message.
+	 *                      The consumer group from which to pop the message.
 	 * @return An {@link Optional} containing the message if found, or empty if no
 	 *         message is available.
 	 */
@@ -127,9 +127,9 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param messageId
-	 *            message identifier to reserve
+	 *                      message identifier to reserve
 	 * @param consumerGroup
-	 *            target consumer group (collection name)
+	 *                      target consumer group (collection name)
 	 * @return Optional containing the newly reserved Message, or empty if not
 	 *         reservable
 	 */
@@ -141,7 +141,11 @@ public class PopMessageService {
 		Criteria reservable = new Criteria().orOperator(Criteria.where(RESERVED_UNTIL).is(null),
 				Criteria.where(RESERVED_UNTIL).lte(now));
 
-		Query query = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(false)).addCriteria(reservable);
+		Criteria scheduleReady = new Criteria().orOperator(Criteria.where(SCHEDULED_AT).is(null),
+				Criteria.where(SCHEDULED_AT).lte(now));
+
+		Query query = new Query(Criteria.where(ID).is(messageId).and(CONSUMED).is(false)).addCriteria(reservable)
+				.addCriteria(scheduleReady);
 
 		Update update = new Update().inc(DELIVERY_COUNT, 1).set(RESERVED_UNTIL, until).set(LAST_DELIVERY_AT, now);
 
@@ -161,7 +165,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            target consumer group (collection name)
+	 *                      target consumer group (collection name)
 	 * @return Optional containing the reserved Message, or empty if none available
 	 */
 	private Optional<Message> reserveOldestAvailable(String consumerGroup) {
@@ -172,7 +176,10 @@ public class PopMessageService {
 		Criteria reservable = new Criteria().orOperator(Criteria.where(RESERVED_UNTIL).is(null),
 				Criteria.where(RESERVED_UNTIL).lte(now));
 
-		Query query = new Query(Criteria.where(CONSUMED).is(false)).addCriteria(reservable)
+		Criteria scheduleReady = new Criteria().orOperator(Criteria.where(SCHEDULED_AT).is(null),
+				Criteria.where(SCHEDULED_AT).lte(now));
+
+		Query query = new Query(Criteria.where(CONSUMED).is(false)).addCriteria(reservable).addCriteria(scheduleReady)
 				.with(Sort.by(Sort.Direction.ASC, CREATED_AT));
 
 		Update update = new Update().inc(DELIVERY_COUNT, 1).set(RESERVED_UNTIL, until).set(LAST_DELIVERY_AT, now);
@@ -198,11 +205,11 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            the message to move to DLQ
+	 *                      the message to move to DLQ
 	 * @param consumerGroup
-	 *            source consumer group
+	 *                      source consumer group
 	 * @param reason
-	 *            reason for DLQ (e.g., "max-deliveries")
+	 *                      reason for DLQ (e.g., "max-deliveries")
 	 */
 	private void moveToDlq(Message message, String consumerGroup, String reason) {
 		String dlqCollection = consumerGroup + lightQProperties.getDlqSuffix();
@@ -242,7 +249,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param dlqCollection
-	 *            the DLQ collection name (group + suffix)
+	 *                      the DLQ collection name (group + suffix)
 	 */
 	private void ensureDlqIndexes(String dlqCollection) {
 		Integer ttl = lightQProperties.getDlqTtlMinutes();

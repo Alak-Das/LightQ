@@ -8,6 +8,7 @@ import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,17 +57,23 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            The {@link Message} object to be pushed.
+	 *                The {@link Message} object to be pushed.
 	 * @return The {@link Message} that was pushed.
 	 */
 	public Message push(Message message) {
 		int contentLength = message.getContent() != null ? message.getContent().length() : 0;
 		logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
 				message.getConsumerGroup(), contentLength);
-		// Save the Message to Cache
-		cacheService.addMessage(message);
-		logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
-				message.getConsumerGroup());
+
+		// If scheduled for future, skip cache
+		if (message.getScheduledAt() != null && message.getScheduledAt().after(new Date())) {
+			logger.debug("Message {} is scheduled for {}, skipping cache", message.getId(), message.getScheduledAt());
+		} else {
+			// Save the Message to Cache
+			cacheService.addMessage(message);
+			logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
+					message.getConsumerGroup());
+		}
 
 		// Fire-and-forget MongoDB persistence
 		persistToMongo(message);
@@ -83,7 +90,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param message
-	 *            the message to persist
+	 *                the message to persist
 	 */
 	@Async("taskExecutor")
 	public void persistToMongo(Message message) {
@@ -101,7 +108,7 @@ public class PushMessageService {
 	 * persists asynchronously to MongoDB grouped by consumerGroup.
 	 *
 	 * @param messages
-	 *            messages to push; null/empty list is a no-op
+	 *                 messages to push; null/empty list is a no-op
 	 * @return the input messages for convenience
 	 */
 	public java.util.List<Message> pushBatch(java.util.List<Message> messages) {
@@ -111,8 +118,19 @@ public class PushMessageService {
 		int size = messages.size();
 		logger.debug("Attempting batch push of {} messages across groups", size);
 
+		// Filter messages eligible for cache (not scheduled in future)
+		java.util.List<Message> immediateMessages = new java.util.ArrayList<>();
+		Date now = new Date();
+		for (Message m : messages) {
+			if (m.getScheduledAt() == null || !m.getScheduledAt().after(now)) {
+				immediateMessages.add(m);
+			}
+		}
+
 		// Save to cache with one pipeline per call and single LPUSHALL per group
-		cacheService.addMessages(messages);
+		if (!immediateMessages.isEmpty()) {
+			cacheService.addMessages(immediateMessages);
+		}
 
 		// Fire-and-forget MongoDB persistence in batch
 		persistToMongoBatch(messages);
@@ -130,7 +148,7 @@ public class PushMessageService {
 	 * </p>
 	 *
 	 * @param messages
-	 *            the messages to persist; null/empty list is ignored
+	 *                 the messages to persist; null/empty list is ignored
 	 */
 	@Async("taskExecutor")
 	public void persistToMongoBatch(java.util.List<Message> messages) {
@@ -168,7 +186,7 @@ public class PushMessageService {
 	 * Inserts a single message with bounded retry and exponential backoff.
 	 *
 	 * @param message
-	 *            the message to insert
+	 *                the message to insert
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -202,9 +220,9 @@ public class PushMessageService {
 	 * exponential backoff.
 	 *
 	 * @param groupMsgs
-	 *            the messages to insert
+	 *                   the messages to insert
 	 * @param collection
-	 *            the MongoDB collection (consumer group) name
+	 *                   the MongoDB collection (consumer group) name
 	 * @return true if insert eventually succeeded within retry budget; false
 	 *         otherwise
 	 */
@@ -243,8 +261,8 @@ public class PushMessageService {
 	 * via expireMinutes.
 	 *
 	 * @param message
-	 *            The {@link Message} providing the target consumer group
-	 *            (collection)
+	 *                The {@link Message} providing the target consumer group
+	 *                (collection)
 	 */
 	private void createTTLIndex(Message message) {
 		String collection = message.getConsumerGroup();

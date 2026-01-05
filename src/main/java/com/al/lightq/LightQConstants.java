@@ -19,6 +19,7 @@ public final class LightQConstants {
 	// HTTP headers
 	public static final String CONSUMER_GROUP_HEADER = "consumerGroup";
 	public static final String MESSAGE_COUNT_HEADER = "messageCount";
+	public static final String SCHEDULED_AT_HEADER = "scheduledAt";
 
 	// API base and endpoints
 	public static final String QUEUE_BASE_URL = "/queue";
@@ -55,6 +56,7 @@ public final class LightQConstants {
 	public static final String DLQ_REASON = "dlqReason";
 	public static final String DLQ_REASON_MAX_DELIVERIES = "max-deliveries";
 	public static final String FAILED_AT = "failedAt";
+	public static final String SCHEDULED_AT = "scheduledAt";
 
 	// Async executor configuration
 	public static final int CORE_POOL_SIZE = 5;
