@@ -349,6 +349,224 @@
             ],
             "title": "DLQ Moves (Rate/1m)",
             "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 16
+            },
+            "id": 5,
+            "targets": [
+                {
+                    "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+                    "legendFormat": "Heap Used",
+                    "refId": "A"
+                },
+                {
+                    "expr": "jvm_memory_used_bytes{area=\"nonheap\"}",
+                    "legendFormat": "Non-Heap Used",
+                    "refId": "B"
+                }
+            ],
+            "title": "JVM Memory Usage",
+            "type": "timeseries",
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes"
+                }
+            }
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 16
+            },
+            "id": 6,
+            "targets": [
+                {
+                    "expr": "system_cpu_usage",
+                    "legendFormat": "System CPU",
+                    "refId": "A"
+                },
+                {
+                    "expr": "process_cpu_usage",
+                    "legendFormat": "Process CPU",
+                    "refId": "B"
+                }
+            ],
+            "title": "CPU Usage",
+            "type": "timeseries",
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 1
+                }
+            }
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 16
+            },
+            "id": 7,
+            "targets": [
+                {
+                    "expr": "rate(jvm_gc_pause_seconds_sum[1m])",
+                    "legendFormat": "GC Pause Time/min",
+                    "refId": "A"
+                }
+            ],
+            "title": "GC Impact",
+            "type": "timeseries",
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                }
+            }
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "id": 8,
+            "targets": [
+                {
+                    "expr": "rate(mongodb_driver_commands_seconds_sum[1m]) / rate(mongodb_driver_commands_seconds_count[1m])",
+                    "legendFormat": "{{command}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "MongoDB Latency (Avg)",
+            "type": "timeseries",
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                }
+            }
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "id": 9,
+            "targets": [
+                {
+                    "expr": "rate(mongodb_driver_commands_seconds_count[1m])",
+                    "legendFormat": "{{command}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "MongoDB Throughput (Ops/sec)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 32
+            },
+            "id": 10,
+            "targets": [
+                {
+                    "expr": "executor_active_threads{name=\"taskExecutor\"}",
+                    "legendFormat": "Active Threads",
+                    "refId": "A"
+                },
+                {
+                    "expr": "executor_pool_size_threads{name=\"taskExecutor\"}",
+                    "legendFormat": "Pool Size",
+                    "refId": "B"
+                }
+            ],
+            "title": "Thread Pool Saturation",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 32
+            },
+            "id": 11,
+            "targets": [
+                {
+                    "expr": "rate(http_server_requests_seconds_count[1m])",
+                    "legendFormat": "{{method}} {{uri}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "HTTP Throughput (RPS)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 32
+            },
+            "id": 12,
+            "targets": [
+                {
+                    "expr": "http_server_requests_seconds_max",
+                    "legendFormat": "{{method}} {{uri}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "HTTP Max Latency",
+            "type": "timeseries",
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                }
+            }
         }
     ],
     "schemaVersion": 26,
