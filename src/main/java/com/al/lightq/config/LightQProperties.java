@@ -91,8 +91,19 @@ public class LightQProperties {
 	@Min(0)
 	private int redisPoolMinIdle = 8;
 
+	// Async persistence feature flag
+	private boolean asyncPersistence = false;
+
 	// Explicit getters and setters (replacing Lombok @Data)
 	public LightQProperties() {
+	}
+
+	public boolean isAsyncPersistence() {
+		return asyncPersistence;
+	}
+
+	public void setAsyncPersistence(boolean asyncPersistence) {
+		this.asyncPersistence = asyncPersistence;
 	}
 
 	public int getMessageAllowedToFetch() {

@@ -33,6 +33,9 @@ class PushMessageServiceTest {
 
 	private SimpleMeterRegistry meterRegistry;
 
+	@Mock
+	private org.springframework.core.task.TaskExecutor taskExecutor;
+
 	private PushMessageService pushMessageService;
 
 	@BeforeEach
@@ -40,7 +43,8 @@ class PushMessageServiceTest {
 		MockitoAnnotations.openMocks(this);
 		meterRegistry = new SimpleMeterRegistry();
 
-		pushMessageService = new PushMessageService(redisQueueService, lightQProperties, mongoTemplate, meterRegistry);
+		pushMessageService = new PushMessageService(redisQueueService, lightQProperties, mongoTemplate, meterRegistry,
+				taskExecutor);
 		ReflectionTestUtils.setField(pushMessageService, "expireMinutes", 60L);
 
 		// Mock index operations to avoid NPE from mongoTemplate.indexOps(...)

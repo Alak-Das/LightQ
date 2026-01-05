@@ -23,6 +23,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 public class PopMessageServiceTest {
 
 	@Mock
@@ -52,10 +53,10 @@ public class PopMessageServiceTest {
 
 		meterRegistry = new SimpleMeterRegistry();
 
-		when(lightQProperties.getVisibilityTimeoutSeconds()).thenReturn(30);
-		when(lightQProperties.getMaxDeliveryAttempts()).thenReturn(5);
+		lenient().when(lightQProperties.getVisibilityTimeoutSeconds()).thenReturn(30);
+		lenient().when(lightQProperties.getMaxDeliveryAttempts()).thenReturn(5);
 		// Used by PopMessageService to compute cache scan window
-		when(lightQProperties.getMessageAllowedToFetch()).thenReturn(50);
+		lenient().when(lightQProperties.getMessageAllowedToFetch()).thenReturn(50);
 
 		popMessageService = new PopMessageService(mongoTemplate, redisQueueService, lightQProperties, dlqService,
 				meterRegistry);

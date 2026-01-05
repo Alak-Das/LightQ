@@ -48,12 +48,16 @@ public class PushMessageService {
 	// ...)
 	private long expireMinutes;
 
+	private final org.springframework.core.task.TaskExecutor taskExecutor;
+
 	public PushMessageService(RedisQueueService redisQueueService, LightQProperties lightQProperties,
-			MongoTemplate mongoTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+			MongoTemplate mongoTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry,
+			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor) {
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.mongoTemplate = mongoTemplate;
 		this.meterRegistry = meterRegistry;
+		this.taskExecutor = taskExecutor;
 		this.indexCache = Caffeine.newBuilder().maximumSize(lightQProperties.getIndexCacheMaxGroups())
 				.expireAfterAccess(java.time.Duration.ofMinutes(lightQProperties.getIndexCacheExpireMinutes())).build();
 	}
@@ -61,9 +65,9 @@ public class PushMessageService {
 	/**
 	 * Pushes a message to the queue.
 	 * <p>
-	 * The message is first added to a cache for immediate availability, and then
-	 * saved to MongoDB asynchronously. A TTL index is ensured for the message's
-	 * collection.
+	 * The message is first added to a cache for immediate availability.
+	 * Persistence to MongoDB happens either synchronously or asynchronously based
+	 * on configuration.
 	 * </p>
 	 *
 	 * @param message
@@ -77,9 +81,28 @@ public class PushMessageService {
 					message.getConsumerGroup(), contentLength);
 		}
 
-		// Persist to MongoDB FIRST (Synchronous) for durability
-		persistToMongo(message);
+		if (lightQProperties.isAsyncPersistence()) {
+			// Write-Behind: Redis First
+			// 1. Add to Redis immediately
+			addToCache(message);
 
+			// 2. Persist to Mongo in background
+			taskExecutor.execute(() -> persistToMongo(message));
+		} else {
+			// Write-Through: Mongo First (Default)
+			// 1. Persist to MongoDB for durability
+			persistToMongo(message);
+
+			// 2. Add to Redis
+			addToCache(message);
+		}
+
+		meterRegistry.counter("lightq.messages.pushed.total", "consumerGroup", message.getConsumerGroup()).increment();
+
+		return message;
+	}
+
+	private void addToCache(Message message) {
 		// If scheduled for future, skip cache
 		if (message.getScheduledAt() != null && message.getScheduledAt().after(new Date())) {
 			logger.debug("Message {} is scheduled for {}, skipping cache", message.getId(), message.getScheduledAt());
@@ -89,17 +112,12 @@ public class PushMessageService {
 			logger.debug("Message with ID {} added to cache for Consumer Group: {}", message.getId(),
 					message.getConsumerGroup());
 		}
-
-		meterRegistry.counter("lightq.messages.pushed.total", "consumerGroup", message.getConsumerGroup()).increment();
-
-		return message;
 	}
 
 	/**
 	 * Asynchronously persists the message to MongoDB.
 	 * <p>
 	 * Ensures required indexes for the consumer group and inserts the document with
-	 * bounded retries and exponential backoff. This is fire-and-forget and does not
 	 * bounded retries and exponential backoff.
 	 * </p>
 	 *

@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -53,9 +53,9 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 	 * Checks if a request is allowed for a given key and limit.
 	 *
 	 * @param key
-	 *            the key to check
+	 *                       the key to check
 	 * @param limitPerSecond
-	 *            the limit per second
+	 *                       the limit per second
 	 * @return true if the request is allowed, false otherwise
 	 */
 	private boolean allow(String key, int limitPerSecond) {
@@ -70,26 +70,55 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 	/**
 	 * A simple rate counter.
 	 */
+	/**
+	 * A simple rate counter using lock-free CAS.
+	 */
 	private static class RateCounter {
-		private volatile long windowSecond = -1L;
-		private final AtomicInteger count = new AtomicInteger(0);
+		// Encapsulate state in an immutable object for atomic swapping
+		private static class Window {
+			final long second;
+			final int count;
+
+			Window(long second, int count) {
+				this.second = second;
+				this.count = count;
+			}
+		}
+
+		private final java.util.concurrent.atomic.AtomicReference<Window> state = new java.util.concurrent.atomic.AtomicReference<>(
+				new Window(0, 0));
 
 		/**
 		 * Checks if a request is allowed for a given limit.
 		 *
 		 * @param limit
-		 *            the limit
+		 *              the limit
 		 * @return true if the request is allowed, false otherwise
 		 */
-		// synchronize to ensure atomic reset + increment across threads
-		synchronized boolean allow(int limit) {
+		boolean allow(int limit) {
 			long nowSec = Instant.now().getEpochSecond();
-			if (windowSecond != nowSec) {
-				windowSecond = nowSec;
-				count.set(0);
+
+			while (true) {
+				Window current = state.get();
+				Window next;
+
+				if (current.second != nowSec) {
+					// New second window, try to reset to count=1
+					next = new Window(nowSec, 1);
+				} else {
+					// Same second, increment count
+					if (current.count >= limit) {
+						return false; // Limit exceeded
+					}
+					next = new Window(nowSec, current.count + 1);
+				}
+
+				// CAS: if state is still 'current', swap with 'next'
+				if (state.compareAndSet(current, next)) {
+					return true;
+				}
+				// If CAS failed, loop and retry with fresh state
 			}
-			int current = count.incrementAndGet();
-			return current <= limit;
 		}
 	}
 }
