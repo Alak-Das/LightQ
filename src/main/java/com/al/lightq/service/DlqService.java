@@ -201,7 +201,7 @@ public class DlqService {
 		if (ttl != null && ttl > 0) {
 			logger.debug("Ensuring DLQ TTL index: collection={}, ttlMinutes={}", dlqCollection, ttl);
 			mongoTemplate.indexOps(dlqCollection)
-					.ensureIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(ttl, TimeUnit.MINUTES));
+					.createIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(ttl, TimeUnit.MINUTES));
 			logger.debug("DLQ TTL index ensured: collection={}", dlqCollection);
 		} else {
 			logger.debug("DLQ TTL not configured or disabled; collection={}", dlqCollection);

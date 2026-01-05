@@ -64,7 +64,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group from which to pop the message.
+	 *            The consumer group from which to pop the message.
 	 * @return An {@link Optional} containing the message if found, or empty if no
 	 *         message is available.
 	 */
@@ -168,9 +168,9 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param messageId
-	 *                      message identifier to reserve
+	 *            message identifier to reserve
 	 * @param consumerGroup
-	 *                      target consumer group (collection name)
+	 *            target consumer group (collection name)
 	 * @return Optional containing the newly reserved Message, or empty if not
 	 *         reservable
 	 */
@@ -208,7 +208,7 @@ public class PopMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *                      target consumer group (collection name)
+	 *            target consumer group (collection name)
 	 * @return Optional containing the reserved Message, or empty if none available
 	 */
 	private Optional<Message> reserveOldestAvailable(String consumerGroup) {

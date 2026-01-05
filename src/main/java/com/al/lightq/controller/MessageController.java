@@ -70,10 +70,9 @@ public class MessageController {
 	 * Pushes a new message to the queue for a specific consumer group.
 	 *
 	 * @param consumerGroup
-	 *                      The header indicating the consumer group for the
-	 *                      message.
+	 *            The header indicating the consumer group for the message.
 	 * @param content
-	 *                      The content of the message to be pushed.
+	 *            The content of the message to be pushed.
 	 * @return A {@link MessageResponse} containing details of the pushed message.
 	 */
 	@PostMapping(PUSH_URL)
@@ -125,9 +124,8 @@ public class MessageController {
 	 * Pops the oldest available message for a specific consumer group.
 	 *
 	 * @param consumerGroup
-	 *                      The header indicating the consumer group from which to
-	 *                      pop the
-	 *                      message.
+	 *            The header indicating the consumer group from which to pop the
+	 *            message.
 	 * @return A {@link ResponseEntity} containing a {@link MessageResponse} if a
 	 *         message is found, or a not found response if the queue is empty.
 	 */
@@ -149,14 +147,12 @@ public class MessageController {
 	 * filtering by consumption status.
 	 *
 	 * @param consumerGroup
-	 *                      The header indicating the consumer group to view
-	 *                      messages from.
+	 *            The header indicating the consumer group to view messages from.
 	 * @param messageCount
-	 *                      The maximum number of messages to retrieve.
+	 *            The maximum number of messages to retrieve.
 	 * @param consumed
-	 *                      Optional header to filter messages by consumption status
-	 *                      ("yes"
-	 *                      for consumed, "no" for unconsumed).
+	 *            Optional header to filter messages by consumption status ("yes"
+	 *            for consumed, "no" for unconsumed).
 	 * @return A {@link ResponseEntity} containing a list of {@link Message}
 	 *         objects.
 	 */
@@ -191,9 +187,9 @@ public class MessageController {
 	 * USER or ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group header.
+	 *            The consumer group header.
 	 * @param messageId
-	 *                      The message identifier to acknowledge.
+	 *            The message identifier to acknowledge.
 	 * @return 200 OK on success; 404 Not Found if the message does not exist.
 	 */
 	@PostMapping(ACK_URL)
@@ -207,15 +203,14 @@ public class MessageController {
 	/**
 	 * Batch acknowledge reserved messages.
 	 *
-	 * Endpoint: POST /queue/batch/ack
-	 * Headers: - consumerGroup: target consumer group (required)
-	 * Body: - JSON array of message IDs to acknowledge
-	 * Security: USER or ADMIN
+	 * Endpoint: POST /queue/batch/ack Headers: - consumerGroup: target consumer
+	 * group (required) Body: - JSON array of message IDs to acknowledge Security:
+	 * USER or ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group header.
+	 *            The consumer group header.
 	 * @param messageIds
-	 *                      The list of message IDs to acknowledge.
+	 *            The list of message IDs to acknowledge.
 	 * @return 200 OK with the count of messages successfully updated.
 	 */
 	@PostMapping(BATCH_ACK_URL)
@@ -237,11 +232,11 @@ public class MessageController {
 	 * optional reason for the nack Security: USER or ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group header.
+	 *            The consumer group header.
 	 * @param messageId
-	 *                      The message identifier to negative-ack.
+	 *            The message identifier to negative-ack.
 	 * @param reason
-	 *                      Optional reason describing the nack cause.
+	 *            Optional reason describing the nack cause.
 	 * @return 200 OK if updated; 404 Not Found / no-op otherwise.
 	 */
 	@PostMapping(NACK_URL)
@@ -264,11 +259,11 @@ public class MessageController {
 	 * Security: USER or ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group header.
+	 *            The consumer group header.
 	 * @param messageId
-	 *                      The message identifier to extend.
+	 *            The message identifier to extend.
 	 * @param seconds
-	 *                      The number of seconds to extend the current reservation.
+	 *            The number of seconds to extend the current reservation.
 	 * @return 200 OK if extended; 400 Bad Request if not currently reserved or not
 	 *         found.
 	 */
@@ -293,9 +288,9 @@ public class MessageController {
 	 * Security: ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group whose DLQ is being viewed.
+	 *            The consumer group whose DLQ is being viewed.
 	 * @param limit
-	 *                      Optional limit for number of DLQ entries returned.
+	 *            Optional limit for number of DLQ entries returned.
 	 * @return 200 OK with a list of DLQ documents.
 	 */
 	@GetMapping(DLQ_VIEW_URL)
@@ -314,9 +309,9 @@ public class MessageController {
 	 * group (required) Body: - JSON array of message IDs to replay Security: ADMIN
 	 *
 	 * @param consumerGroup
-	 *                      The consumer group whose DLQ entries should be replayed.
+	 *            The consumer group whose DLQ entries should be replayed.
 	 * @param ids
-	 *                      The list of message IDs to replay.
+	 *            The list of message IDs to replay.
 	 * @return 200 OK with the count of messages successfully replayed.
 	 */
 	@PostMapping(DLQ_REPLAY_URL)
@@ -336,7 +331,7 @@ public class MessageController {
 	 * </p>
 	 *
 	 * @param requested
-	 *                  optional client-provided limit
+	 *            optional client-provided limit
 	 * @return a positive limit not exceeding the configured maximum
 	 */
 	private int resolveLimit(Integer requested) {

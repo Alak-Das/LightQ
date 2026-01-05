@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -53,9 +52,9 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 	 * Checks if a request is allowed for a given key and limit.
 	 *
 	 * @param key
-	 *                       the key to check
+	 *            the key to check
 	 * @param limitPerSecond
-	 *                       the limit per second
+	 *            the limit per second
 	 * @return true if the request is allowed, false otherwise
 	 */
 	private boolean allow(String key, int limitPerSecond) {
@@ -92,7 +91,7 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 		 * Checks if a request is allowed for a given limit.
 		 *
 		 * @param limit
-		 *              the limit
+		 *            the limit
 		 * @return true if the request is allowed, false otherwise
 		 */
 		boolean allow(int limit) {

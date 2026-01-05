@@ -50,7 +50,7 @@ class PushMessageServiceTest {
 		// Mock index operations to avoid NPE from mongoTemplate.indexOps(...)
 		IndexOperations indexOps = mock(IndexOperations.class);
 		when(mongoTemplate.indexOps(anyString())).thenReturn(indexOps);
-		when(indexOps.ensureIndex(any(Index.class))).thenReturn("ok");
+		when(indexOps.createIndex(any(Index.class))).thenReturn("ok");
 		when(lightQProperties.getPersistenceDurationMinutes()).thenReturn(60);
 	}
 
