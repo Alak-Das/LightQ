@@ -137,26 +137,26 @@ public class PopMessageService {
 	 * not, removes it from Redis.
 	 */
 	private void cleanupIfInvalid(Message idxMessage, String consumerGroup) {
-		try {
-			Query query = new Query(Criteria.where("_id").is(idxMessage.getId()));
-			query.fields().include("consumed", "id");
-			Message dbMessage = mongoTemplate.findOne(query, Message.class, consumerGroup);
+		// Async Self-Healing: Check DB in background to avoid blocking the pop flow
+		taskExecutor.execute(() -> {
+			try {
+				Query query = new Query(Criteria.where("_id").is(idxMessage.getId()));
+				query.fields().include("consumed", "id");
+				Message dbMessage = mongoTemplate.findOne(query, Message.class, consumerGroup);
 
-			if (dbMessage == null) {
-				logger.warn("Self-Healing: Message {} found in Redis but missing in DB. Removing from Redis.",
-						idxMessage.getId());
-				taskExecutor.execute(() -> redisQueueService.removeOne(consumerGroup, idxMessage));
-			} else if (dbMessage.isConsumed()) {
-				logger.warn("Self-Healing: Message {} found in Redis but is consumed in DB. Removing from Redis.",
-						idxMessage.getId());
-				taskExecutor.execute(() -> redisQueueService.removeOne(consumerGroup, idxMessage));
+				if (dbMessage == null) {
+					logger.warn("Self-Healing: Message {} found in Redis but missing in DB. Removing from Redis.",
+							idxMessage.getId());
+					redisQueueService.removeOne(consumerGroup, idxMessage);
+				} else if (dbMessage.isConsumed()) {
+					logger.warn("Self-Healing: Message {} found in Redis but is consumed in DB. Removing from Redis.",
+							idxMessage.getId());
+					redisQueueService.removeOne(consumerGroup, idxMessage);
+				}
+			} catch (Exception e) {
+				logger.warn("Self-Healing check failed for message {}", idxMessage.getId(), e);
 			}
-			// If it exists and matches but couldn't be reserved, it's likely reserved by
-			// another consumer
-			// or scheduled for future. In that case, we leave it (it's valid).
-		} catch (Exception e) {
-			logger.warn("Self-Healing check failed for message {}", idxMessage.getId(), e);
-		}
+		});
 	}
 
 	/**

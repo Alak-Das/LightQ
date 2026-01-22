@@ -81,7 +81,7 @@
       },
       "item": [
         {
-          "name": "POST /queue/push (scheduled +5s)",
+          "name": "POST /queue/push (scheduled +3s)",
           "request": {
             "method": "POST",
             "header": [
@@ -118,8 +118,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Set futureTime to 5 seconds from now ISO8601",
-                  "const future = new Date(Date.now() + 5000);",
+                  "// Set futureTime to 3 seconds from now ISO8601",
+                  "const future = new Date(Date.now() + 3000);",
                   "pm.environment.set('futureTime', future.toISOString());"
                 ]
               }
@@ -171,10 +171,10 @@
           ]
         },
         {
-          "name": "Wait 6s",
+          "name": "Wait 10s",
           "request": {
             "method": "GET",
-            "url": "https://postman-echo.com/delay/6"
+            "url": "https://postman-echo.com/delay/10"
           },
           "event": [
             {
@@ -182,7 +182,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Waited 6s', () => pm.response.code === 200);"
+                  "pm.test('Waited 10s', () => pm.response.code === 200);"
                 ]
               }
             }
@@ -744,6 +744,198 @@
                   "// Spring validation may return 400 with default error shape",
                   "pm.test('Status 400', () => pm.response.code === 400);",
                   "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/batch/push (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"batch-msg-1\", \"batch-msg-2\", \"batch-msg-3\"]"
+            },
+            "url": "{{baseUrl}}/queue/batch/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns array of 3', () => Array.isArray(json) && json.length === 3);",
+                  "pm.test('Echoed correlation id', () => pm.response.headers.get('X-Request-Id') === pm.request.headers.get('X-Request-Id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/batch/push (for ack)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"ack-1\", \"ack-2\"]"
+            },
+            "url": "{{baseUrl}}/queue/batch/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (get id 1 for batch ack)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('batchAckId1', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /queue/pop (get id 2 for batch ack)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('batchAckId2', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /queue/batch/ack (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"{{batchAckId1}}\", \"{{batchAckId2}}\"]"
+            },
+            "url": "{{baseUrl}}/queue/batch/ack"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "pm.test('Returns count 2', () => pm.response.json() === 2);"
                 ]
               }
             }

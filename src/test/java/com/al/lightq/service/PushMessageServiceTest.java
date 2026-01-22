@@ -97,4 +97,55 @@ class PushMessageServiceTest {
 		// Verify metrics (still counted as pushed)
 		assertEquals(1.0, meterRegistry.get("lightq.messages.pushed.total").counter().count());
 	}
+
+	@Test
+	void pushBatch_AsyncEnabled() {
+		// Enabled by default in setUp, but let's be explicit if needed or rely on
+		// default
+		when(lightQProperties.isAsyncPersistence()).thenReturn(true);
+
+		String consumerGroup = "batchGroup";
+		java.util.List<Message> messages = java.util.Arrays.asList(
+				new Message("id1", consumerGroup, "content1"),
+				new Message("id2", consumerGroup, "content2"));
+
+		// Mock TaskExecutor to run immediately in current thread for testing
+		org.mockito.Mockito.doAnswer(invocation -> {
+			Runnable r = invocation.getArgument(0);
+			r.run();
+			return null;
+		}).when(taskExecutor).execute(any(Runnable.class));
+
+		java.util.List<Message> result = pushMessageService.pushBatch(messages);
+
+		assertNotNull(result);
+		assertEquals(2, result.size());
+
+		// Verify Redis called for batch add
+		org.mockito.Mockito.verify(redisQueueService, org.mockito.Mockito.times(1)).addMessages(any());
+
+		// Verify TaskExecutor called for async persistence
+		org.mockito.Mockito.verify(taskExecutor, org.mockito.Mockito.times(1)).execute(any(Runnable.class));
+	}
+
+	@Test
+	void pushBatch_AsyncDisabled() {
+		when(lightQProperties.isAsyncPersistence()).thenReturn(false);
+
+		String consumerGroup = "batchGroupSync";
+		java.util.List<Message> messages = java.util.Arrays.asList(
+				new Message("id1", consumerGroup, "content1"),
+				new Message("id2", consumerGroup, "content2"));
+
+		java.util.List<Message> result = pushMessageService.pushBatch(messages);
+
+		assertNotNull(result);
+		assertEquals(2, result.size());
+
+		// Verify Redis called
+		org.mockito.Mockito.verify(redisQueueService, org.mockito.Mockito.times(1)).addMessages(any());
+
+		// Verify TaskExecutor NOT called (sync persistence happening directly)
+		org.mockito.Mockito.verify(taskExecutor, org.mockito.Mockito.never()).execute(any(Runnable.class));
+	}
 }

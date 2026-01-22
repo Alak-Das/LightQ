@@ -68,15 +68,34 @@ public class RedisQueueService {
 	 * Adds a message to the cache.
 	 *
 	 * @param message
-	 *            the message to add
+	 *                the message to add
+	 */
+	/**
+	 * Adds a message to the cache.
+	 *
+	 * @param message
+	 *                the message to add
 	 */
 	public void addMessage(Message message) {
+		addMessage(message, System.currentTimeMillis());
+	}
+
+	/**
+	 * Adds a message to the cache with a specific score.
+	 *
+	 * @param message
+	 *                the message to add
+	 * @param score
+	 *                the score to use for the sorted set (lower is popped first)
+	 */
+	public void addMessage(Message message, double score) {
 		monitorGroup(message.getConsumerGroup());
 		String key = LightQConstants.CACHE_PREFIX + message.getConsumerGroup();
 		long ttlMinutes = (this.redisCacheTtlMinutes > 0)
 				? this.redisCacheTtlMinutes
 				: lightQProperties.getCacheTtlMinutes();
-		logger.debug("Cache add: key={}, messageId={}, ttlMinutes={}", key, message.getId(), ttlMinutes);
+		logger.debug("Cache add: key={}, messageId={}, score={}, ttlMinutes={}", key, message.getId(), score,
+				ttlMinutes);
 
 		// Pipeline ZADD + ZREMRANGEBYRANK + EXPIRE
 		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
@@ -86,8 +105,8 @@ public class RedisQueueService {
 				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
 				org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
 
-				// Use current time as score for FIFO
-				zset.add(key, message, System.currentTimeMillis());
+				// Use provided score
+				zset.add(key, message, score);
 
 				int maxCacheEntries = Math.max(1,
 						lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
@@ -104,7 +123,7 @@ public class RedisQueueService {
 	 * Pops a message from the cache (removes item with lowest score).
 	 *
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @return the popped message, or null if no message was popped
 	 */
 	public Message popMessage(String consumerGroup) {
@@ -125,7 +144,7 @@ public class RedisQueueService {
 	 * Views messages in the cache (by score, low to high).
 	 *
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @return the list of messages
 	 */
 	public List<Message> viewMessages(String consumerGroup) {
@@ -145,9 +164,9 @@ public class RedisQueueService {
 	 * Views up to 'limit' oldest messages in the cache efficiently.
 	 *
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @param limit
-	 *            maximum number of messages to return (>=1)
+	 *                      maximum number of messages to return (>=1)
 	 * @return up to 'limit' messages from the head of the sorted set (lowest score)
 	 */
 	public List<Message> viewMessages(String consumerGroup, int limit) {
@@ -168,7 +187,7 @@ public class RedisQueueService {
 	 * Batch add messages grouped by consumer group using pipelining and ZADD.
 	 *
 	 * @param messages
-	 *            messages to add; ignored if null/empty
+	 *                 messages to add; ignored if null/empty
 	 */
 	public void addMessages(java.util.List<Message> messages) {
 		if (messages == null || messages.isEmpty()) {
@@ -225,9 +244,9 @@ public class RedisQueueService {
 	 * list. Uses Redis ZREM.
 	 *
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @param message
-	 *            the message instance to remove
+	 *                      the message instance to remove
 	 * @return true if an element was removed
 	 */
 	public boolean removeOne(String consumerGroup, Message message) {

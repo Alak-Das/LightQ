@@ -97,7 +97,14 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 - Correlation ID tracing
 - OpenAPI (Swagger UI)
 - Actuator health endpoint
+- Actuator health endpoint
 - Dockerized
+
+### Optimization & Scaling
+- **Async Persistence**: Batch operations offload MongoDB persistence to background threads for high throughput.
+- **Scheduled Promoter**: Background service actively promotes due messages from DB to Redis to prevent starvation.
+- **Async Self-Healing**: Pop operations clean up invalid cache entries asynchronously.
+- **Cached Indexing**: DLQ operations cache index existence to reduce DB calls.
 
 > [!IMPORTANT]
 > **Upgrade Notice**: Internal Redis structures have changed from List to ZSet (Sorted Set) for idempotency.
@@ -301,6 +308,7 @@ All properties can be set via environment variables in containerized deployments
 |----------|---------|-------------|
 | MONGO_URI | mongodb://admin:password@localhost:27017/?authSource=admin | Connection string |
 | MONGO_DB | lightq-db | Database name |
+| LIGHTQ_ASYNC_PERSISTENCE | true | Enable asynchronous MongoDB persistence (write-behind) |
 
 ### 8.2 Redis
 | Variable | Default | Description |
@@ -330,7 +338,9 @@ Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If uns
 |----------|---------|-------------|
 | LIGHTQ_MESSAGE_ALLOWED_TO_FETCH | 50 | /queue/view max results |
 | LIGHTQ_PERSISTENCE_DURATION_MINUTES | 1440 | MongoDB TTL (minutes) |
+| LIGHTQ_PERSISTENCE_DURATION_MINUTES | 1440 | MongoDB TTL (minutes) |
 | LIGHTQ_CACHE_TTL_MINUTES | 30 | Redis TTL (minutes) |
+| LIGHTQ_SCHEDULED_PROMOTER_RATE_MS | 5000 | Frequency (ms) to check/promote due messages |
 
 ### 8.6 Reservation / Ack / DLQ
 | Variable | Default | Description |
@@ -435,7 +445,7 @@ Response 200
 ```
 
 ### 1a) Batch Push (Bulk)
-Add multiple messages to a consumer group in one request. Minimizes per-message overhead and uses a single Redis pipeline per call, with async bulk inserts to MongoDB.
+Add multiple messages to a consumer group in one request. Minimizes per-message overhead and uses a single Redis pipeline per call, with async bulk inserts to MongoDB (when async persistence is enabled).
 
 Request
 ```http
@@ -736,6 +746,8 @@ Notes:
 - Suggested indexes:
   - createdAt (TTL)
   - Compound read-path index: { consumed: 1, reservedUntil: 1, createdAt: 1 }
+- **Scheduled Messages**: Ensure `lightq.scheduled-promoter.rate-ms` is tuned for your precision requirements.
+- **Async Persistence**: Enabled by default (`lightq.async-persistence=true`). Disable for strict durability at the cost of latency.
 
 ## 17. Troubleshooting
 

@@ -63,6 +63,13 @@ public class PopMessageServiceTest {
 
 		popMessageService = new PopMessageService(mongoTemplate, redisQueueService, lightQProperties, dlqService,
 				meterRegistry, taskExecutor);
+
+		// Mock TaskExecutor to run immediately for all tests
+		doAnswer(invocation -> {
+			Runnable r = invocation.getArgument(0);
+			r.run();
+			return null;
+		}).when(taskExecutor).execute(any(Runnable.class));
 	}
 
 	@Test
@@ -179,6 +186,7 @@ public class PopMessageServiceTest {
 
 	@Test
 	void testPop_SelfHealing_RemovesInvalidMessageFromCache() {
+
 		// Scenario: Message in cache, but marked consumed in DB
 		Message invalidMessage = new Message("invalid-id", consumerGroup, "content");
 		invalidMessage.setConsumed(true); // in reality, the DB instance returns true
@@ -190,10 +198,10 @@ public class PopMessageServiceTest {
 		when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class),
 				eq(Message.class), anyString())).thenReturn(null);
 
-		// Self-healing check: findById returns the consumed message
+		// Self-healing check: findOne returns the consumed message
 		Message consumedInDb = new Message("invalid-id", consumerGroup, "content");
 		consumedInDb.setConsumed(true);
-		when(mongoTemplate.findById(eq("invalid-id"), eq(Message.class), eq(consumerGroup))).thenReturn(consumedInDb);
+		when(mongoTemplate.findOne(any(Query.class), eq(Message.class), eq(consumerGroup))).thenReturn(consumedInDb);
 
 		// Fallback to empty DB (so loop finishes)
 		// Note: The second findAndModify is for reserveOldestAvailable
@@ -207,7 +215,10 @@ public class PopMessageServiceTest {
 
 		assertFalse(result.isPresent());
 
-		// Verify removeOne was called due to self-healing
+		// Verify taskExecutor was used for async check
+		verify(taskExecutor, times(1)).execute(any(Runnable.class));
+
+		// Verify removeOne was called due to self-healing (inside the task)
 		verify(redisQueueService, times(1)).removeOne(consumerGroup, invalidMessage);
 	}
 }

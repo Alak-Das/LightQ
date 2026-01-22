@@ -151,21 +151,46 @@ public class PushMessageService {
 		int size = messages.size();
 		logger.debug("Attempting batch push of {} messages across groups", size);
 
-		// Persist all to MongoDB FIRST (Synchronous)
-		persistToMongoBatch(messages);
+		if (lightQProperties.isAsyncPersistence()) {
+			// Write-Behind: Redis First
 
-		// Filter messages eligible for cache (not scheduled in future)
-		java.util.List<Message> immediateMessages = new java.util.ArrayList<>();
-		Date now = new Date();
-		for (Message m : messages) {
-			if (m.getScheduledAt() == null || !m.getScheduledAt().after(now)) {
-				immediateMessages.add(m);
+			// 1. Separate immediate messages (for Cache) vs scheduled (skip Cache)
+			java.util.List<Message> immediateMessages = new java.util.ArrayList<>();
+			Date now = new Date();
+
+			for (Message m : messages) {
+				if (m.getScheduledAt() == null || !m.getScheduledAt().after(now)) {
+					immediateMessages.add(m);
+				}
 			}
-		}
 
-		// Save to cache with one pipeline per call and single LPUSHALL per group
-		if (!immediateMessages.isEmpty()) {
-			redisQueueService.addMessages(immediateMessages);
+			// 2. Add immediate messages to Redis synchronously (fast)
+			if (!immediateMessages.isEmpty()) {
+				redisQueueService.addMessages(immediateMessages);
+			}
+
+			// 3. Persist ALL messages to Mongo in background
+			taskExecutor.execute(() -> persistToMongoBatch(messages));
+
+		} else {
+			// Write-Through: Mongo First (Default)
+
+			// 1. Persist to MongoDB FIRST (Synchronous)
+			persistToMongoBatch(messages);
+
+			// 2. Filter messages eligible for cache (not scheduled in future)
+			java.util.List<Message> immediateMessages = new java.util.ArrayList<>();
+			Date now = new Date();
+			for (Message m : messages) {
+				if (m.getScheduledAt() == null || !m.getScheduledAt().after(now)) {
+					immediateMessages.add(m);
+				}
+			}
+
+			// 3. Save to cache with one pipeline per call and single LPUSHALL per group
+			if (!immediateMessages.isEmpty()) {
+				redisQueueService.addMessages(immediateMessages);
+			}
 		}
 
 		return messages;

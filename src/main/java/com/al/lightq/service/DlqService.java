@@ -4,6 +4,8 @@ import static com.al.lightq.LightQConstants.*;
 
 import com.al.lightq.config.LightQProperties;
 import com.al.lightq.model.Message;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -44,12 +46,20 @@ public class DlqService {
 	private final LightQProperties lightQProperties;
 	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
+	// Cache to track ensured indexes per DLQ collection to avoid redundant calls
+	private final Cache<String, Boolean> indexCache;
+
 	public DlqService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
 			LightQProperties lightQProperties, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
 		this.mongoTemplate = mongoTemplate;
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.meterRegistry = meterRegistry;
+
+		this.indexCache = Caffeine.newBuilder()
+				.maximumSize(lightQProperties.getIndexCacheMaxGroups())
+				.expireAfterAccess(java.time.Duration.ofMinutes(lightQProperties.getIndexCacheExpireMinutes()))
+				.build();
 	}
 
 	/**
@@ -60,9 +70,9 @@ public class DlqService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the target consumer group whose DLQ to inspect
+	 *                      the target consumer group whose DLQ to inspect
 	 * @param limit
-	 *            maximum number of DLQ documents to return
+	 *                      maximum number of DLQ documents to return
 	 * @return list of DLQ documents; empty list if none found
 	 */
 	public List<Document> view(String consumerGroup, int limit) {
@@ -87,9 +97,11 @@ public class DlqService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the target consumer group whose DLQ entries should be replayed
+	 *                      the target consumer group whose DLQ entries should be
+	 *                      replayed
 	 * @param ids
-	 *            list of DLQ document ids to replay; null/empty is treated as no-op
+	 *                      list of DLQ document ids to replay; null/empty is
+	 *                      treated as no-op
 	 * @return number of entries successfully replayed
 	 */
 	public int replay(String consumerGroup, List<String> ids) {
@@ -146,11 +158,11 @@ public class DlqService {
 	 * </p>
 	 *
 	 * @param message
-	 *            the message to move to DLQ
+	 *                      the message to move to DLQ
 	 * @param consumerGroup
-	 *            source consumer group
+	 *                      source consumer group
 	 * @param reason
-	 *            reason for DLQ (e.g., "max-deliveries")
+	 *                      reason for DLQ (e.g., "max-deliveries")
 	 */
 	public void moveToDlq(Message message, String consumerGroup, String reason) {
 		String dlqCollection = consumerGroup + lightQProperties.getDlqSuffix();
@@ -194,17 +206,20 @@ public class DlqService {
 	 * </p>
 	 *
 	 * @param dlqCollection
-	 *            the DLQ collection name (group + suffix)
+	 *                      the DLQ collection name (group + suffix)
 	 */
 	private void ensureDlqIndexes(String dlqCollection) {
 		Integer ttl = lightQProperties.getDlqTtlMinutes();
 		if (ttl != null && ttl > 0) {
-			logger.debug("Ensuring DLQ TTL index: collection={}, ttlMinutes={}", dlqCollection, ttl);
-			mongoTemplate.indexOps(dlqCollection)
-					.createIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(ttl, TimeUnit.MINUTES));
-			logger.debug("DLQ TTL index ensured: collection={}", dlqCollection);
+			indexCache.get(dlqCollection, k -> {
+				logger.debug("Ensuring DLQ TTL index: collection={}, ttlMinutes={}", dlqCollection, ttl);
+				mongoTemplate.indexOps(dlqCollection)
+						.createIndex(new Index().on(CREATED_AT, Sort.Direction.ASC).expire(ttl, TimeUnit.MINUTES));
+				logger.debug("DLQ TTL index ensured: collection={}", dlqCollection);
+				return Boolean.TRUE;
+			});
 		} else {
-			logger.debug("DLQ TTL not configured or disabled; collection={}", dlqCollection);
+			// No TTL, no index needed.
 		}
 	}
 }
