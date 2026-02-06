@@ -94,6 +94,11 @@ public class LightQProperties {
 	// Async persistence feature flag
 	private boolean asyncPersistence = true;
 
+	// Compression settings
+	private boolean compressionEnabled = false;
+	@Min(0)
+	private int compressionThresholdBytes = 1024;
+
 	// Explicit getters and setters (replacing Lombok @Data)
 	public LightQProperties() {
 	}
@@ -272,5 +277,21 @@ public class LightQProperties {
 
 	public void setRedisPoolMinIdle(int redisPoolMinIdle) {
 		this.redisPoolMinIdle = redisPoolMinIdle;
+	}
+
+	public boolean isCompressionEnabled() {
+		return compressionEnabled;
+	}
+
+	public void setCompressionEnabled(boolean compressionEnabled) {
+		this.compressionEnabled = compressionEnabled;
+	}
+
+	public int getCompressionThresholdBytes() {
+		return compressionThresholdBytes;
+	}
+
+	public void setCompressionThresholdBytes(int compressionThresholdBytes) {
+		this.compressionThresholdBytes = compressionThresholdBytes;
 	}
 }

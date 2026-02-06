@@ -272,13 +272,10 @@ git clone https://github.com/Alak-Das/LightQ.git
 cd LightQ
 ```
 
-2) Infra (Option A: Docker Compose)
-```bash
-cp .env.example .env
-docker compose up -d mongodb redis
-```
-
-Option B: Local installations (start mongod and redis as you prefer).
+2) Infra (External Services Required)
+Ensure MongoDB and Redis are running externally with credentials:
+- MongoDB: `mongodb://admin:supersecret@localhost:27017`
+- Redis: `localhost:6379` with password `supersecret`
 
 3) Configure
 - application.properties has sensible defaults (match docker-compose.yml)
@@ -306,7 +303,7 @@ All properties can be set via environment variables in containerized deployments
 ### 8.1 MongoDB
 | Variable | Default | Description |
 |----------|---------|-------------|
-| MONGO_URI | mongodb://admin:password@localhost:27017/?authSource=admin | Connection string |
+| MONGO_URI | mongodb://admin:supersecret@localhost:27017/?authSource=admin | Connection string |
 | MONGO_DB | lightq-db | Database name |
 | LIGHTQ_ASYNC_PERSISTENCE | true | Enable asynchronous MongoDB persistence (write-behind) |
 
@@ -315,7 +312,7 @@ All properties can be set via environment variables in containerized deployments
 |----------|---------|-------------|
 | SPRING_DATA_REDIS_HOST | localhost | Redis host |
 | SPRING_DATA_REDIS_PORT | 6379 | Redis port |
-| SPRING_DATA_REDIS_PASSWORD | (empty) | Redis password |
+| SPRING_DATA_REDIS_PASSWORD | supersecret | Redis password |
 
 ### 8.3 Security
 | Variable | Default | Description |
@@ -662,7 +659,7 @@ Returns application status and dependency checks (Redis, MongoDB). This endpoint
 Runtime log level may be adjusted via Actuator if enabled for loggers.
 
 ### Metrics (Prometheus)
-LightQ exposes application metrics at `/actuator/prometheus` for scraping.
+LightQ exposes application metrics at `/actuator/prometheus` for scraping by external Prometheus instances.
 
 | Metric | Type | Description | Tags |
 |--------|------|-------------|------|
@@ -678,10 +675,7 @@ Additional System & Performance Metrics:
 - **Database**: MongoDB Driver Latency & Throughput
 - **Application**: HTTP Request Rate, Latency, and Thread Pool Saturation
 
-### Monitoring Stack
-The Docker Compose setup includes a pre-configured monitoring stack:
-- **Prometheus**: Scrapes metrics every 5s. Configured with Basic Auth to access the secured application endpoint.
-- **Grafana**: Pre-provisioned "LightQ Dashboard" visualizing all the above metrics (Queue, System, DB, App).
+> **Note**: To set up a monitoring stack, configure an external Prometheus instance to scrape `/actuator/prometheus` with Basic Auth credentials, and connect Grafana to visualize the metrics.
 
 ## 13. Testing
 
@@ -704,29 +698,31 @@ mvn test
 
 ## 14. Docker Deployment
 
-See docker-compose.yml for production-ready stack:
-- **lightq-service**: The Core API
-- **mongodb**: Data store (+ healthcheck)
-- **redis**: Cache (+ healthcheck)
-- **prometheus**: Metric collection (Port 9090)
-- **grafana**: Metric visualization (Port 3000)
+The `docker-compose.yml` provides a lightweight setup that runs only the **lightq-service** container, connecting to **external MongoDB and Redis** instances.
+
+### Prerequisites
+Before running, ensure you have:
+- **MongoDB** running externally (e.g., `mongodb://admin:supersecret@localhost:27017`)
+- **Redis** running externally (e.g., `localhost:6379` with password `supersecret`)
 
 Quick start:
 ```bash
-cp .env.example .env
+# Build and run (connects to external MongoDB/Redis)
 docker compose up -d --build
 ```
 
 ### Access Points
-- **API**: http://localhost:8080/queue
-- **Swagger UI**: http://localhost:8080/swagger-ui/index.html
-- **Grafana**: http://localhost:3000 (Login: `admin`/`admin`)
-  - Go to **Dashboards** -> **LightQ Dashboard** to view real-time metrics.
-- **Prometheus**: http://localhost:9090
+- **API**: http://localhost:8081/queue
+- **Swagger UI**: http://localhost:8081/swagger-ui/index.html
+- **Health Check**: http://localhost:8081/actuator/health
 
-Notes:
-- The service container uses MONGO_URI with authSource=admin to connect to the MongoDB service.
-- To enable Redis authentication, set SPRING_DATA_REDIS_PASSWORD and uncomment the redis command in docker-compose.yml.
+### Configuration
+The container connects to external services via `host.docker.internal`. Environment variables in `docker-compose.yml`:
+- `MONGO_URI`: MongoDB connection string
+- `SPRING_DATA_REDIS_HOST`: Redis host
+- `SPRING_DATA_REDIS_PASSWORD`: Redis password
+
+> **Note**: Port 8081 is used by default. Modify `docker-compose.yml` if a different port is needed.
 
 ## 15. Security
 
@@ -824,7 +820,7 @@ Defaults
 - USER: user/password
 - ADMIN: admin/adminpassword
 - Redis: localhost:6379
-- MongoDB: mongodb://admin:password@localhost:27017/?authSource=admin
+- MongoDB: mongodb://admin:supersecret@localhost:27017/?authSource=admin
 - rate.limit.push-per-second: 100
 - rate.limit.pop-per-second: 200
 - lightq.message-allowed-to-fetch: 50
@@ -860,8 +856,8 @@ Notes:
 - The collection no longer defines collection-level defaults. Ensure the selected Postman environment has baseUrl set (Current Value), otherwise requests may fail with "request url is empty". When using Newman, pass -e postman/LightQ.local.postman_environment.json or provide --env-var baseUrl=... etc.
 
 Prerequisites
-- MongoDB and Redis running (docker compose up -d mongodb redis)
-- LightQ app running on http://localhost:8080 (mvn spring-boot:run)
+- External MongoDB and Redis running (with credentials: admin/supersecret)
+- LightQ app running on http://localhost:8081 (docker compose up -d --build)
 - Default credentials (can be overridden via env vars):
   - USER: user/password
   - ADMIN: admin/adminpassword
@@ -869,9 +865,8 @@ Prerequisites
 Run via Newman (local Node)
 1) Install Newman
    npm install -g newman
-2) Start infra and app (in separate terminal):
-   docker compose up -d mongodb redis
-   mvn spring-boot:run
+2) Start app:
+   docker compose up -d --build
 3) Execute tests
    newman run postman/LightQ.postman_collection.json -e postman/LightQ.local.postman_environment.json --reporters cli,junit --reporter-junit-export target/newman-results.xml
 
@@ -948,4 +943,4 @@ jobs:
           path: target/newman-results.xml
 ```
 
-Last Updated: January 2026
+Last Updated: February 2026

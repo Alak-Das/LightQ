@@ -80,11 +80,13 @@ public class MessageController {
 	public MessageResponse push(
 			@RequestHeader(CONSUMER_GROUP_HEADER) @Pattern(regexp = "^[a-zA-Z0-9-_]{1,50}$", message = INVALID_CONSUMER_GROUP_MESSAGE) String consumerGroup,
 			@RequestHeader(value = SCHEDULED_AT_HEADER, required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date scheduledAt,
+			@RequestHeader(value = "priority", required = false, defaultValue = "0") int priority,
 			@NotBlank(message = EMPTY_MESSAGE_CONTENT_MESSAGE) @Size(max = 1048576, message = MESSAGE_SIZE_EXCEEDED_MESSAGE) @RequestBody String content) {
 		int contentLength = content != null ? content.length() : 0;
-		logger.debug("Received push request for consumer group: {} with contentLength={} chars, scheduledAt={}",
-				consumerGroup, contentLength, scheduledAt);
-		Message message = new Message(UUID.randomUUID().toString(), consumerGroup, content, scheduledAt);
+		logger.debug(
+				"Received push request for consumer group: {} with contentLength={} chars, scheduledAt={}, priority={}",
+				consumerGroup, contentLength, scheduledAt, priority);
+		Message message = new Message(UUID.randomUUID().toString(), consumerGroup, content, scheduledAt, priority);
 		Message pushedMessage = pushMessageService.push(message);
 		logger.debug("Message with ID {} pushed to consumer group {}", pushedMessage.getId(), consumerGroup);
 		return new MessageResponse(pushedMessage);
@@ -106,6 +108,7 @@ public class MessageController {
 	public ResponseEntity<java.util.List<MessageResponse>> batchPush(
 			@RequestHeader(CONSUMER_GROUP_HEADER) @Pattern(regexp = "^[a-zA-Z0-9-_]{1,50}$", message = INVALID_CONSUMER_GROUP_MESSAGE) String consumerGroup,
 			@RequestHeader(value = SCHEDULED_AT_HEADER, required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date scheduledAt,
+			@RequestHeader(value = "priority", required = false, defaultValue = "0") int priority,
 			@RequestBody java.util.List<@NotBlank(message = EMPTY_MESSAGE_CONTENT_MESSAGE) @Size(max = 1048576, message = MESSAGE_SIZE_EXCEEDED_MESSAGE) String> contents) {
 		if (contents == null || contents.isEmpty()) {
 			return ResponseEntity.badRequest().build();
@@ -114,7 +117,7 @@ public class MessageController {
 				consumerGroup, contents.size(), scheduledAt);
 		java.util.List<Message> messages = new java.util.ArrayList<>(contents.size());
 		for (String c : contents) {
-			messages.add(new Message(UUID.randomUUID().toString(), consumerGroup, c, scheduledAt));
+			messages.add(new Message(UUID.randomUUID().toString(), consumerGroup, c, scheduledAt, priority));
 		}
 		java.util.List<Message> pushed = pushMessageService.pushBatch(messages);
 		java.util.List<MessageResponse> response = pushed.stream().map(MessageResponse::new).toList();

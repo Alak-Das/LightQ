@@ -38,7 +38,7 @@ class ScheduledMessagePromoterTest {
     void promoteScheduledMessages_shouldPromoteMessages_whenFound() {
         // Arrange
         Date scheduledTime = Date.from(Instant.now().minusSeconds(10));
-        Message msg1 = new Message("msg1", "content", "group1", new Date(), false, scheduledTime);
+        Message msg1 = new Message("msg1", "content", "group1", new Date(), false, scheduledTime, 0);
 
         // First call returns msg1, second call returns null (stop loop)
         when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class),

@@ -15,6 +15,9 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
+import com.al.lightq.util.CompressionHub;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 
 /**
  * Service for reserving messages (pop), prioritizing cache and then falling
@@ -42,19 +45,22 @@ public class PopMessageService {
 	private final DlqService dlqService;
 	private final LightQProperties lightQProperties;
 	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+	private final CircuitBreaker mongoCircuitBreaker;
 
 	private final org.springframework.core.task.TaskExecutor taskExecutor;
 
 	public PopMessageService(MongoTemplate mongoTemplate, RedisQueueService redisQueueService,
 			LightQProperties lightQProperties, DlqService dlqService,
 			io.micrometer.core.instrument.MeterRegistry meterRegistry,
-			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor) {
+			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor,
+			CircuitBreakerRegistry circuitBreakerRegistry) {
 		this.mongoTemplate = mongoTemplate;
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.dlqService = dlqService;
 		this.meterRegistry = meterRegistry;
 		this.taskExecutor = taskExecutor;
+		this.mongoCircuitBreaker = circuitBreakerRegistry.circuitBreaker("mongodb");
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(PopMessageService.class);
@@ -86,7 +92,8 @@ public class PopMessageService {
 						if (candidate == null) {
 							continue;
 						}
-						Optional<Message> reservedOpt = reserveById(candidate.getId(), consumerGroup);
+						Optional<Message> reservedOpt = mongoCircuitBreaker
+								.executeSupplier(() -> reserveById(candidate.getId(), consumerGroup));
 						if (reservedOpt.isPresent()) {
 							Message reserved = reservedOpt.get();
 							if (reserved.getDeliveryCount() > maxAttempts) {
@@ -102,20 +109,26 @@ public class PopMessageService {
 
 							meterRegistry.counter("lightq.messages.popped.total", "consumerGroup", consumerGroup,
 									"source", "cache").increment();
+
+							if (reserved.isCompressed()) {
+								reserved.setContent(CompressionHub.decompress(reserved.getContent()));
+							}
 							return Optional.of(reserved);
 						}
 						cleanupIfInvalid(candidate, consumerGroup);
 					}
 
 					// Fallback to DB-only reservation
-					Optional<Message> dbReserved = reserveOldestAvailable(consumerGroup);
+					Optional<Message> dbReserved = mongoCircuitBreaker
+							.executeSupplier(() -> reserveOldestAvailable(consumerGroup));
 					while (dbReserved.isPresent()) {
 						Message reserved = dbReserved.get();
 						if (reserved.getDeliveryCount() > maxAttempts) {
 							logger.info("Message {} exceeded maxDeliveryAttempts ({}). Moving to DLQ for group {}",
 									reserved.getId(), maxAttempts, consumerGroup);
 							dlqService.moveToDlq(reserved, consumerGroup, DLQ_REASON_MAX_DELIVERIES);
-							dbReserved = reserveOldestAvailable(consumerGroup);
+							dbReserved = mongoCircuitBreaker
+									.executeSupplier(() -> reserveOldestAvailable(consumerGroup));
 							continue;
 						}
 						logger.debug("Reserved message {} from DB for group {} with deliveryCount {}", reserved.getId(),
@@ -124,6 +137,10 @@ public class PopMessageService {
 						meterRegistry
 								.counter("lightq.messages.popped.total", "consumerGroup", consumerGroup, "source", "db")
 								.increment();
+
+						if (reserved.isCompressed()) {
+							reserved.setContent(CompressionHub.decompress(reserved.getContent()));
+						}
 						return Optional.of(reserved);
 					}
 
@@ -138,7 +155,7 @@ public class PopMessageService {
 	 */
 	private void cleanupIfInvalid(Message idxMessage, String consumerGroup) {
 		// Async Self-Healing: Check DB in background to avoid blocking the pop flow
-		taskExecutor.execute(() -> {
+		taskExecutor.execute(() -> mongoCircuitBreaker.executeRunnable(() -> {
 			try {
 				Query query = new Query(Criteria.where("_id").is(idxMessage.getId()));
 				query.fields().include("consumed", "id");
@@ -156,7 +173,7 @@ public class PopMessageService {
 			} catch (Exception e) {
 				logger.warn("Self-Healing check failed for message {}", idxMessage.getId(), e);
 			}
-		});
+		}));
 	}
 
 	/**

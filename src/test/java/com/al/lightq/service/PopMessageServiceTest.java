@@ -61,8 +61,28 @@ public class PopMessageServiceTest {
 		// Used by PopMessageService to compute cache scan window
 		lenient().when(lightQProperties.getMessageAllowedToFetch()).thenReturn(50);
 
+		// Mock Circuit Breaker
+		io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry registry = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry.class);
+		io.github.resilience4j.circuitbreaker.CircuitBreaker circuitBreaker = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreaker.class);
+		when(registry.circuitBreaker("mongodb")).thenReturn(circuitBreaker);
+
+		// Mock executeSupplier
+		doAnswer(inv -> {
+			java.util.function.Supplier<?> s = inv.getArgument(0);
+			return s.get();
+		}).when(circuitBreaker).executeSupplier(any(java.util.function.Supplier.class));
+
+		// Mock executeRunnable
+		doAnswer(inv -> {
+			Runnable r = inv.getArgument(0);
+			r.run();
+			return null;
+		}).when(circuitBreaker).executeRunnable(any(Runnable.class));
+
 		popMessageService = new PopMessageService(mongoTemplate, redisQueueService, lightQProperties, dlqService,
-				meterRegistry, taskExecutor);
+				meterRegistry, taskExecutor, registry);
 
 		// Mock TaskExecutor to run immediately for all tests
 		doAnswer(invocation -> {

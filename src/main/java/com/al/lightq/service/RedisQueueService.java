@@ -14,6 +14,8 @@ import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.stereotype.Service;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 
 /**
  * Redis cache access for LightQ.
@@ -40,16 +42,19 @@ public class RedisQueueService {
 	private final LightQProperties lightQProperties;
 	private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 	private final java.util.concurrent.ConcurrentHashMap<String, Boolean> monitoredGroups = new java.util.concurrent.ConcurrentHashMap<>();
+	private final CircuitBreaker redisCircuitBreaker;
 
 	// For tests to override TTL via
 	// ReflectionTestUtils.setField("redisCacheTtlMinutes", ...)
 	private long redisCacheTtlMinutes;
 
 	public RedisQueueService(RedisTemplate<String, Message> redisTemplate, LightQProperties lightQProperties,
-			io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+			io.micrometer.core.instrument.MeterRegistry meterRegistry,
+			CircuitBreakerRegistry circuitBreakerRegistry) {
 		this.redisTemplate = redisTemplate;
 		this.lightQProperties = lightQProperties;
 		this.meterRegistry = meterRegistry;
+		this.redisCircuitBreaker = circuitBreakerRegistry.circuitBreaker("redis");
 	}
 
 	private void monitorGroup(String consumerGroup) {
@@ -77,7 +82,7 @@ public class RedisQueueService {
 	 *                the message to add
 	 */
 	public void addMessage(Message message) {
-		addMessage(message, System.currentTimeMillis());
+		addMessage(message, calculateScore(message, System.currentTimeMillis()));
 	}
 
 	/**
@@ -98,25 +103,26 @@ public class RedisQueueService {
 				ttlMinutes);
 
 		// Pipeline ZADD + ZREMRANGEBYRANK + EXPIRE
-		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
-			@Override
-			@SuppressWarnings("unchecked")
-			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
-				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
-				org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
+		redisCircuitBreaker.executeRunnable(
+				() -> redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
+					@Override
+					@SuppressWarnings("unchecked")
+					public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
+						org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
+						org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
 
-				// Use provided score
-				zset.add(key, message, score);
+						// Use provided score
+						zset.add(key, message, score);
 
-				int maxCacheEntries = Math.max(1,
-						lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
+						int maxCacheEntries = Math.max(1,
+								lightQProperties != null ? lightQProperties.getCacheMaxEntriesPerGroup() : 100);
 
-				zset.removeRange(key, maxCacheEntries, -1);
+						zset.removeRange(key, maxCacheEntries, -1);
 
-				ops.expire(key, Duration.ofMinutes(ttlMinutes));
-				return null;
-			}
-		});
+						ops.expire(key, Duration.ofMinutes(ttlMinutes));
+						return null;
+					}
+				}));
 	}
 
 	/**
@@ -127,17 +133,19 @@ public class RedisQueueService {
 	 * @return the popped message, or null if no message was popped
 	 */
 	public Message popMessage(String consumerGroup) {
-		monitorGroup(consumerGroup);
-		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		TypedTuple<Message> poppedTuple = redisTemplate.opsForZSet().popMin(key);
-		Message popped = (poppedTuple != null) ? poppedTuple.getValue() : null;
+		return redisCircuitBreaker.executeSupplier(() -> {
+			monitorGroup(consumerGroup);
+			String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+			TypedTuple<Message> poppedTuple = redisTemplate.opsForZSet().popMin(key);
+			Message popped = (poppedTuple != null) ? poppedTuple.getValue() : null;
 
-		if (popped != null) {
-			logger.debug("Cache hit (pop): key={}, messageId={}", key, popped.getId());
-		} else {
-			logger.debug("Cache miss (pop): key={}", key);
-		}
-		return popped;
+			if (popped != null) {
+				logger.debug("Cache hit (pop): key={}, messageId={}", key, popped.getId());
+			} else {
+				logger.debug("Cache miss (pop): key={}", key);
+			}
+			return popped;
+		});
 	}
 
 	/**
@@ -148,16 +156,18 @@ public class RedisQueueService {
 	 * @return the list of messages
 	 */
 	public List<Message> viewMessages(String consumerGroup) {
-		monitorGroup(consumerGroup);
-		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		Set<Message> cachedObjects = redisTemplate.opsForZSet().range(key, 0, -1);
-		if (cachedObjects == null || cachedObjects.isEmpty()) {
-			logger.debug("Cache view: no entries for key={}", key);
-			return Collections.emptyList();
-		}
-		logger.debug("Cache view: key={}, size={}", key, cachedObjects.size());
-		// Set to List
-		return new java.util.ArrayList<>(cachedObjects);
+		return redisCircuitBreaker.executeSupplier(() -> {
+			monitorGroup(consumerGroup);
+			String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+			Set<Message> cachedObjects = redisTemplate.opsForZSet().range(key, 0, -1);
+			if (cachedObjects == null || cachedObjects.isEmpty()) {
+				logger.debug("Cache view: no entries for key={}", key);
+				return Collections.emptyList();
+			}
+			logger.debug("Cache view: key={}, size={}", key, cachedObjects.size());
+			// Set to List
+			return new java.util.ArrayList<>(cachedObjects);
+		});
 	}
 
 	/**
@@ -170,17 +180,19 @@ public class RedisQueueService {
 	 * @return up to 'limit' messages from the head of the sorted set (lowest score)
 	 */
 	public List<Message> viewMessages(String consumerGroup, int limit) {
-		monitorGroup(consumerGroup);
-		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		int safeLimit = Math.max(1, limit);
-		// ZRANGE is 0-based inclusive. So to get N items, 0 to N-1.
-		Set<Message> head = redisTemplate.opsForZSet().range(key, 0, safeLimit - 1);
-		if (head == null || head.isEmpty()) {
-			logger.debug("Cache view limited: no entries for key={}", key);
-			return Collections.emptyList();
-		}
-		logger.debug("Cache view limited: key={}, size={}", key, head.size());
-		return new java.util.ArrayList<>(head);
+		return redisCircuitBreaker.executeSupplier(() -> {
+			monitorGroup(consumerGroup);
+			String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+			int safeLimit = Math.max(1, limit);
+			// ZRANGE is 0-based inclusive. So to get N items, 0 to N-1.
+			Set<Message> head = redisTemplate.opsForZSet().range(key, 0, safeLimit - 1);
+			if (head == null || head.isEmpty()) {
+				logger.debug("Cache view limited: no entries for key={}", key);
+				return Collections.emptyList();
+			}
+			logger.debug("Cache view limited: key={}, size={}", key, head.size());
+			return new java.util.ArrayList<>(head);
+		});
 	}
 
 	/**
@@ -211,32 +223,34 @@ public class RedisQueueService {
 			return;
 		}
 
-		redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
-			@Override
-			@SuppressWarnings("unchecked")
-			public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
-				org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
-				org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
+		redisCircuitBreaker.executeRunnable(
+				() -> redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
+					@Override
+					@SuppressWarnings("unchecked")
+					public Object execute(org.springframework.data.redis.core.RedisOperations operations) {
+						org.springframework.data.redis.core.RedisOperations<String, Message> ops = (org.springframework.data.redis.core.RedisOperations<String, Message>) operations;
+						org.springframework.data.redis.core.ZSetOperations<String, Message> zset = ops.opsForZSet();
 
-				for (java.util.Map.Entry<String, java.util.List<Message>> e : byGroup.entrySet()) {
-					String key = LightQConstants.CACHE_PREFIX + e.getKey();
-					java.util.List<Message> groupMsgs = e.getValue();
+						for (java.util.Map.Entry<String, java.util.List<Message>> e : byGroup.entrySet()) {
+							String key = LightQConstants.CACHE_PREFIX + e.getKey();
+							java.util.List<Message> groupMsgs = e.getValue();
 
-					// Prepare typed tuples
-					long now = System.currentTimeMillis();
-					Set<TypedTuple<Message>> tuples = groupMsgs.stream()
-							.map(msg -> new DefaultTypedTuple<>(msg, (double) now)).collect(Collectors.toSet());
+							// Prepare typed tuples
+							long now = System.currentTimeMillis();
+							Set<TypedTuple<Message>> tuples = groupMsgs.stream()
+									.map(msg -> new DefaultTypedTuple<>(msg, calculateScore(msg, now)))
+									.collect(Collectors.toSet());
 
-					zset.add(key, tuples);
+							zset.add(key, tuples);
 
-					// Trim: keep 0 to max-1, remove max to -1
-					zset.removeRange(key, maxCacheEntries, -1);
+							// Trim: keep 0 to max-1, remove max to -1
+							zset.removeRange(key, maxCacheEntries, -1);
 
-					ops.expire(key, java.time.Duration.ofMinutes(ttlMinutes));
-				}
-				return null;
-			}
-		});
+							ops.expire(key, java.time.Duration.ofMinutes(ttlMinutes));
+						}
+						return null;
+					}
+				}));
 	}
 
 	/**
@@ -250,14 +264,38 @@ public class RedisQueueService {
 	 * @return true if an element was removed
 	 */
 	public boolean removeOne(String consumerGroup, Message message) {
-		String key = LightQConstants.CACHE_PREFIX + consumerGroup;
-		Long removed = redisTemplate.opsForZSet().remove(key, message);
-		boolean ok = removed != null && removed > 0;
-		if (ok) {
-			logger.debug("Cache removeOne: key={}, messageId={}", key, message.getId());
-		} else {
-			logger.debug("Cache removeOne miss: key={}, messageId={}", key, message.getId());
-		}
-		return ok;
+		return redisCircuitBreaker.executeSupplier(() -> {
+			String key = LightQConstants.CACHE_PREFIX + consumerGroup;
+			Long removed = redisTemplate.opsForZSet().remove(key, message);
+			boolean ok = removed != null && removed > 0;
+			if (ok) {
+				logger.debug("Cache removeOne: key={}, messageId={}", key, message.getId());
+			} else {
+				logger.debug("Cache removeOne miss: key={}, messageId={}", key, message.getId());
+			}
+			return ok;
+		});
+	}
+
+	/**
+	 * Calculates the ZSet score based on priority and timestamp.
+	 * <p>
+	 * Formula: (10 - priority) * 10^13 + timestamp. Result: Higher priority (10)
+	 * gets lower score (popped first). Lower priority (0) gets higher score. Within
+	 * same priority, older timestamp pops first (FIFO).
+	 * </p>
+	 * 
+	 * @param message
+	 *                  the message containing priority
+	 * @param timestamp
+	 *                  base timestamp (usually System.currentTimeMillis())
+	 * @return the calculated score
+	 */
+	private double calculateScore(Message message, long timestamp) {
+		// Priority 0-10.
+		// Shift to ensure priority dominates timestamp (which is ~1.7e12)
+		// 10^13 = 10,000,000,000,000
+		long priorityShift = (10L - message.getPriority()) * 10_000_000_000_000L;
+		return (double) (priorityShift + timestamp);
 	}
 }

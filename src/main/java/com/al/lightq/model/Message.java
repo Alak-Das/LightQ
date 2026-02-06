@@ -40,8 +40,12 @@ public class Message implements Serializable {
 	private Date lastDeliveryAt; // last time it was handed out
 	/** Optional reason from last negative acknowledgement or processing failure. */
 	private String lastError; // optional reason from last nack or failure
+	/** Priority level (0-10), higher is more urgent. Default 0. */
+	private int priority;
 	/** Time when the message becomes visible for processing. */
 	private Date scheduledAt;
+	/** Indicates if the content is compressed (GZIP + Base64). */
+	private boolean compressed;
 
 	// Explicit constructors and getters (replacing Lombok)
 	/**
@@ -54,54 +58,61 @@ public class Message implements Serializable {
 	 * Full constructor for core fields.
 	 *
 	 * @param id
-	 *            unique identifier
+	 *                      unique identifier
 	 * @param content
-	 *            message payload
+	 *                      message payload
 	 * @param consumerGroup
-	 *            consumer group (collection name)
+	 *                      consumer group (collection name)
 	 * @param createdAt
-	 *            creation timestamp
+	 *                      creation timestamp
 	 * @param consumed
-	 *            consumed flag
+	 *                      consumed flag
 	 * @param scheduledAt
-	 *            time when the message becomes visible
+	 *                      time when the message becomes visible
+	 * @param priority
+	 *                      priority level
 	 */
 	public Message(String id, String content, String consumerGroup, Date createdAt, boolean consumed,
-			Date scheduledAt) {
+			Date scheduledAt, int priority) {
 		this.id = id;
 		this.content = content;
 		this.consumerGroup = consumerGroup;
 		this.createdAt = createdAt;
 		this.consumed = consumed;
 		this.scheduledAt = scheduledAt;
+		this.priority = priority;
 	}
 
 	/**
 	 * Full constructor including delivery/visibility/diagnostic fields.
 	 *
 	 * @param id
-	 *            unique identifier
+	 *                       unique identifier
 	 * @param content
-	 *            message payload
+	 *                       message payload
 	 * @param consumerGroup
-	 *            consumer group (collection name)
+	 *                       consumer group (collection name)
 	 * @param createdAt
-	 *            creation timestamp
+	 *                       creation timestamp
 	 * @param consumed
-	 *            consumed flag
+	 *                       consumed flag
 	 * @param deliveryCount
-	 *            number of times reserved
+	 *                       number of times reserved
 	 * @param reservedUntil
-	 *            reservation expiry time
+	 *                       reservation expiry time
 	 * @param lastDeliveryAt
-	 *            last reservation timestamp
+	 *                       last reservation timestamp
 	 * @param lastError
-	 *            last error message if any
+	 *                       last error message if any
+	 * @param lastError
+	 *                       last error message if any
 	 * @param scheduledAt
-	 *            time when the message becomes visible
+	 *                       time when the message becomes visible
+	 * @param priority
+	 *                       priority level
 	 */
 	public Message(String id, String content, String consumerGroup, Date createdAt, boolean consumed, int deliveryCount,
-			Date reservedUntil, Date lastDeliveryAt, String lastError, Date scheduledAt) {
+			Date reservedUntil, Date lastDeliveryAt, String lastError, Date scheduledAt, int priority) {
 		this.id = id;
 		this.content = content;
 		this.consumerGroup = consumerGroup;
@@ -112,6 +123,7 @@ public class Message implements Serializable {
 		this.lastDeliveryAt = lastDeliveryAt;
 		this.lastError = lastError;
 		this.scheduledAt = scheduledAt;
+		this.priority = priority;
 	}
 
 	public String getId() {
@@ -120,6 +132,10 @@ public class Message implements Serializable {
 
 	public String getContent() {
 		return content;
+	}
+
+	public void setContent(String content) {
+		this.content = content;
 	}
 
 	public String getConsumerGroup() {
@@ -162,41 +178,76 @@ public class Message implements Serializable {
 		return scheduledAt;
 	}
 
+	public int getPriority() {
+		return priority;
+	}
+
+	public void setPriority(int priority) {
+		this.priority = priority;
+	}
+
+	public boolean isCompressed() {
+		return compressed;
+	}
+
+	public void setCompressed(boolean compressed) {
+		this.compressed = compressed;
+	}
+
 	/**
 	 * Constructor for new messages.
 	 *
 	 * @param messageId
-	 *            the message ID
+	 *                      the message ID
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @param content
-	 *            the message content
+	 *                      the message content
 	 * @param scheduledAt
-	 *            optional time when the message becomes visible
+	 *                      optional time when the message becomes visible
+	 * @param priority
+	 *                      priority level (0-10)
 	 */
-	public Message(String messageId, String consumerGroup, String content, Date scheduledAt) {
-		this(messageId, content, consumerGroup, new Date(), false, scheduledAt);
+
+	public Message(String messageId, String consumerGroup, String content, Date scheduledAt, int priority) {
+		this(messageId, content, consumerGroup, new Date(), false, scheduledAt, priority);
 	}
 
 	/**
 	 * Constructor for new messages (immediate delivery).
 	 *
 	 * @param messageId
-	 *            the message ID
+	 *                      the message ID
 	 * @param consumerGroup
-	 *            the consumer group
+	 *                      the consumer group
 	 * @param content
-	 *            the message content
+	 *                      the message content
+	 * @param priority
+	 *                      priority level (0-10)
+	 */
+	public Message(String messageId, String consumerGroup, String content, int priority) {
+		this(messageId, content, consumerGroup, new Date(), false, null, priority);
+	}
+
+	/**
+	 * Constructor for new messages (immediate delivery, default priority).
+	 *
+	 * @param messageId
+	 *                      the message ID
+	 * @param consumerGroup
+	 *                      the consumer group
+	 * @param content
+	 *                      the message content
 	 */
 	public Message(String messageId, String consumerGroup, String content) {
-		this(messageId, content, consumerGroup, new Date(), false, null);
+		this(messageId, content, consumerGroup, new Date(), false, null, 0);
 	}
 
 	/**
 	 * Legacy full constructor (for backward compatibility).
 	 */
 	public Message(String id, String content, String consumerGroup, Date createdAt, boolean consumed) {
-		this(id, content, consumerGroup, createdAt, consumed, null);
+		this(id, content, consumerGroup, createdAt, consumed, null, 0);
 	}
 
 	/**
@@ -206,7 +257,7 @@ public class Message implements Serializable {
 	public Message(String id, String content, String consumerGroup, Date createdAt, boolean consumed, int deliveryCount,
 			Date reservedUntil, Date lastDeliveryAt, String lastError) {
 		this(id, content, consumerGroup, createdAt, consumed, deliveryCount, reservedUntil, lastDeliveryAt, lastError,
-				null);
+				null, 0);
 	}
 
 	/**
@@ -238,6 +289,6 @@ public class Message implements Serializable {
 		return "Message{" + "id='" + id + '\'' + ", consumerGroup='" + consumerGroup + '\'' + ", createdAt=" + createdAt
 				+ ", consumed=" + consumed + ", deliveryCount=" + deliveryCount + ", reservedUntil=" + reservedUntil
 				+ ", lastDeliveryAt=" + lastDeliveryAt + ", lastError='" + lastError + '\'' + ", scheduledAt="
-				+ scheduledAt + '}';
+				+ scheduledAt + ", priority=" + priority + '}';
 	}
 }

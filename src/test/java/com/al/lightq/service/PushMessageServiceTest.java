@@ -43,22 +43,35 @@ class PushMessageServiceTest {
 		MockitoAnnotations.openMocks(this);
 		meterRegistry = new SimpleMeterRegistry();
 
-		pushMessageService = new PushMessageService(redisQueueService, lightQProperties, mongoTemplate, meterRegistry,
-				taskExecutor);
-		ReflectionTestUtils.setField(pushMessageService, "expireMinutes", 60L);
-
 		// Mock index operations to avoid NPE from mongoTemplate.indexOps(...)
 		IndexOperations indexOps = mock(IndexOperations.class);
 		when(mongoTemplate.indexOps(anyString())).thenReturn(indexOps);
 		when(indexOps.createIndex(any(Index.class))).thenReturn("ok");
 		when(lightQProperties.getPersistenceDurationMinutes()).thenReturn(60);
+
+		// Mock Circuit Breaker
+		io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry registry = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry.class);
+		io.github.resilience4j.circuitbreaker.CircuitBreaker circuitBreaker = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreaker.class);
+		when(registry.circuitBreaker("mongodb")).thenReturn(circuitBreaker);
+		// Mock executeRunnable to just run the runnable
+		org.mockito.Mockito.doAnswer(inv -> {
+			Runnable r = inv.getArgument(0);
+			r.run();
+			return null;
+		}).when(circuitBreaker).executeRunnable(any(Runnable.class));
+
+		pushMessageService = new PushMessageService(redisQueueService, lightQProperties, mongoTemplate, meterRegistry,
+				taskExecutor, registry);
+		ReflectionTestUtils.setField(pushMessageService, "expireMinutes", 60L);
 	}
 
 	@Test
 	void push() {
 		String consumerGroup = "testGroup";
 		String content = "testContent";
-		Message messageToPush = new Message("testId", consumerGroup, content);
+		Message messageToPush = new Message("testId", consumerGroup, content, 0);
 
 		// Mock addMessage call in RedisQueueService (void method)
 		org.mockito.Mockito.doNothing().when(redisQueueService).addMessage(any(Message.class));
@@ -80,7 +93,7 @@ class PushMessageServiceTest {
 		String consumerGroup = "testGroup";
 		String content = "testContent";
 		java.util.Date future = new java.util.Date(System.currentTimeMillis() + 10000);
-		Message messageToPush = new Message("testId", consumerGroup, content, future);
+		Message messageToPush = new Message("testId", consumerGroup, content, future, 0);
 
 		// Mock insert into MongoTemplate (non-void)
 		when(mongoTemplate.insert(any(Message.class), eq(consumerGroup))).thenReturn(messageToPush);
@@ -106,8 +119,8 @@ class PushMessageServiceTest {
 
 		String consumerGroup = "batchGroup";
 		java.util.List<Message> messages = java.util.Arrays.asList(
-				new Message("id1", consumerGroup, "content1"),
-				new Message("id2", consumerGroup, "content2"));
+				new Message("id1", consumerGroup, "content1", 0),
+				new Message("id2", consumerGroup, "content2", 0));
 
 		// Mock TaskExecutor to run immediately in current thread for testing
 		org.mockito.Mockito.doAnswer(invocation -> {
@@ -134,8 +147,8 @@ class PushMessageServiceTest {
 
 		String consumerGroup = "batchGroupSync";
 		java.util.List<Message> messages = java.util.Arrays.asList(
-				new Message("id1", consumerGroup, "content1"),
-				new Message("id2", consumerGroup, "content2"));
+				new Message("id1", consumerGroup, "content1", 0),
+				new Message("id2", consumerGroup, "content2", 0));
 
 		java.util.List<Message> result = pushMessageService.pushBatch(messages);
 

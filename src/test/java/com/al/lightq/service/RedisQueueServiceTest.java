@@ -52,7 +52,26 @@ class RedisQueueServiceTest {
 		when(lightQProperties.getCacheTtlMinutes()).thenReturn(30);
 		when(lightQProperties.getCacheMaxEntriesPerGroup()).thenReturn(100);
 
-		redisQueueService = new RedisQueueService(redisTemplate, lightQProperties, meterRegistry);
+		// Mock CircuitBreaker
+		io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry registry = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry.class);
+		io.github.resilience4j.circuitbreaker.CircuitBreaker circuitBreaker = mock(
+				io.github.resilience4j.circuitbreaker.CircuitBreaker.class);
+		when(registry.circuitBreaker("redis")).thenReturn(circuitBreaker);
+
+		// Mock execution methods
+		doAnswer(inv -> {
+			Runnable r = inv.getArgument(0);
+			r.run();
+			return null;
+		}).when(circuitBreaker).executeRunnable(any(Runnable.class));
+
+		doAnswer(inv -> {
+			java.util.function.Supplier<?> s = inv.getArgument(0);
+			return s.get();
+		}).when(circuitBreaker).executeSupplier(any(java.util.function.Supplier.class));
+
+		redisQueueService = new RedisQueueService(redisTemplate, lightQProperties, meterRegistry, registry);
 		ReflectionTestUtils.setField(redisQueueService, "redisCacheTtlMinutes", 60L);
 
 		message = new Message("id1", CONSUMER_GROUP, "content1");

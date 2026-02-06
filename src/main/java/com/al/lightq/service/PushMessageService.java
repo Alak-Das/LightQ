@@ -18,6 +18,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.stereotype.Service;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import com.al.lightq.util.CompressionHub;
 
 /**
  * Service for pushing messages to the queue.
@@ -44,6 +47,7 @@ public class PushMessageService {
 	// Tracks which consumer groups have had indexes ensured (bounded to avoid
 	// memory growth)
 	private final Cache<String, Boolean> indexCache;
+	private final CircuitBreaker mongoCircuitBreaker;
 
 	// For tests to override TTL via ReflectionTestUtils.setField("expireMinutes",
 	// ...)
@@ -53,7 +57,8 @@ public class PushMessageService {
 
 	public PushMessageService(RedisQueueService redisQueueService, LightQProperties lightQProperties,
 			MongoTemplate mongoTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry,
-			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor) {
+			@org.springframework.beans.factory.annotation.Qualifier("taskExecutor") org.springframework.core.task.TaskExecutor taskExecutor,
+			CircuitBreakerRegistry circuitBreakerRegistry) {
 		this.redisQueueService = redisQueueService;
 		this.lightQProperties = lightQProperties;
 		this.mongoTemplate = mongoTemplate;
@@ -61,6 +66,7 @@ public class PushMessageService {
 		this.taskExecutor = taskExecutor;
 		this.indexCache = Caffeine.newBuilder().maximumSize(lightQProperties.getIndexCacheMaxGroups())
 				.expireAfterAccess(java.time.Duration.ofMinutes(lightQProperties.getIndexCacheExpireMinutes())).build();
+		this.mongoCircuitBreaker = circuitBreakerRegistry.circuitBreaker("mongodb");
 	}
 
 	/**
@@ -76,31 +82,44 @@ public class PushMessageService {
 	 * @return The {@link Message} that was pushed.
 	 */
 	public Message push(Message message) {
-		if (logger.isDebugEnabled()) {
-			int contentLength = message.getContent() != null ? message.getContent().length() : 0;
-			logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
-					message.getConsumerGroup(), contentLength);
-		}
+		return io.micrometer.core.instrument.Timer.builder("lightq.push.latency").register(meterRegistry).record(() -> {
+			if (logger.isDebugEnabled()) {
+				int contentLength = message.getContent() != null ? message.getContent().length() : 0;
+				logger.debug("Attempting to push message to Consumer Group: {} with contentLength={} chars",
+						message.getConsumerGroup(), contentLength);
+			}
 
-		if (lightQProperties.isAsyncPersistence()) {
-			// Write-Behind: Redis First
-			// 1. Add to Redis immediately
-			addToCache(message);
+			// Compression Check
+			if (lightQProperties.isCompressionEnabled() && message.getContent() != null
+					&& message.getContent().length() > lightQProperties.getCompressionThresholdBytes()) {
+				String compressed = CompressionHub.compress(message.getContent());
+				message.setContent(compressed);
+				message.setCompressed(true);
+				logger.debug("Compressed message {} (size {} -> {})", message.getId(), message.getContent().length(),
+						compressed.length());
+			}
 
-			// 2. Persist to Mongo in background
-			taskExecutor.execute(() -> persistToMongo(message));
-		} else {
-			// Write-Through: Mongo First (Default)
-			// 1. Persist to MongoDB for durability
-			persistToMongo(message);
+			if (lightQProperties.isAsyncPersistence()) {
+				// Write-Behind: Redis First
+				// 1. Add to Redis immediately
+				addToCache(message);
 
-			// 2. Add to Redis
-			addToCache(message);
-		}
+				// 2. Persist to Mongo in background
+				taskExecutor.execute(() -> mongoCircuitBreaker.executeRunnable(() -> persistToMongo(message)));
+			} else {
+				// Write-Through: Mongo First (Default)
+				// 1. Persist to MongoDB for durability
+				mongoCircuitBreaker.executeRunnable(() -> persistToMongo(message));
 
-		meterRegistry.counter("lightq.messages.pushed.total", "consumerGroup", message.getConsumerGroup()).increment();
+				// 2. Add to Redis
+				addToCache(message);
+			}
 
-		return message;
+			meterRegistry.counter("lightq.messages.pushed.total", "consumerGroup", message.getConsumerGroup())
+					.increment();
+
+			return message;
+		});
 	}
 
 	private void addToCache(Message message) {
@@ -170,13 +189,13 @@ public class PushMessageService {
 			}
 
 			// 3. Persist ALL messages to Mongo in background
-			taskExecutor.execute(() -> persistToMongoBatch(messages));
+			taskExecutor.execute(() -> mongoCircuitBreaker.executeRunnable(() -> persistToMongoBatch(messages)));
 
 		} else {
 			// Write-Through: Mongo First (Default)
 
 			// 1. Persist to MongoDB FIRST (Synchronous)
-			persistToMongoBatch(messages);
+			mongoCircuitBreaker.executeRunnable(() -> persistToMongoBatch(messages));
 
 			// 2. Filter messages eligible for cache (not scheduled in future)
 			java.util.List<Message> immediateMessages = new java.util.ArrayList<>();

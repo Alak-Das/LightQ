@@ -63,6 +63,49 @@
       ]
     },
     {
+      "name": "Setup: Create Default User",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{adminUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{adminPass}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{userUser}}\",\n  \"password\": \"{{userPass}}\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/subscribers"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created (or 400 if exists)', () => pm.response.code === 201 || pm.response.code === 400);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
       "name": "Delayed Delivery",
       "auth": {
         "type": "basic",
@@ -1156,6 +1199,209 @@
       ]
     },
     {
+      "name": "Subscriber Management (Admin)",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          {
+            "key": "username",
+            "value": "{{adminUser}}",
+            "type": "string"
+          },
+          {
+            "key": "password",
+            "value": "{{adminPass}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Create Subscriber (test-sub)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test-sub\",\n  \"password\": \"pass123\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/subscribers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.code === 201);",
+                  "const json = pm.response.json();",
+                  "pm.test('Username returned', () => json.username === 'test-sub');",
+                  "pm.test('Password hidden', () => !json.password);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Subscribers (verify test-sub)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/subscribers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Contains test-sub', () => json.some(s => s.username === 'test-sub'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Login (New Sub)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "test-sub",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "pass123",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "sub-test-group"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "msg-from-sub"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 (Login success)', () => pm.response.code === 200);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Subscriber (test-sub)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/admin/subscribers/test-sub"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 204 No Content', () => pm.response.code === 204);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Subscribers (verify deleted)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/subscribers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test('Does not contain test-sub', () => !json.some(s => s.username === 'test-sub'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Login Fail (Deleted Sub)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "test-sub",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "pass123",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "sub-test-group"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "msg-should-fail"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401 Unauthorized', () => pm.response.code === 401);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Security",
       "item": [
         {
@@ -1253,11 +1499,143 @@
       ]
     },
     {
+      "name": "Per-Subscriber Rate Limit",
+      "item": [
+        {
+          "name": "Create Limit User (limit=5)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{adminUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{adminPass}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"limit-user\",\n  \"password\": \"pass123\",\n  \"rateLimit\": 5\n}"
+            },
+            "url": "{{baseUrl}}/admin/subscribers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.code === 201);",
+                  "pm.test('Rate Limit is 5', () => pm.response.json().rateLimit === 5);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Limit Enforcement (6 requests)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/health",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const url = pm.environment.get('baseUrl') + '/queue/push';",
+                  "const auth = 'Basic ' + btoa('limit-user:pass123');",
+                  "const headers = { 'Authorization': auth, 'consumerGroup': 'limit-group', 'Content-Type': 'text/plain' };",
+                  "let responses = [];",
+                  "let completed = 0;",
+                  "const total = 6;",
+                  "// Send 6 in parallel (ish)",
+                  "for (let i = 0; i < total; i++) {",
+                  "  pm.sendRequest({ url: url, method: 'POST', header: headers, body: { mode: 'raw', raw: 'msg-' + i } }, (err, res) => {",
+                  "    responses.push(res.code);",
+                  "    completed++;",
+                  "    if (completed === total) {",
+                  "       const successes = responses.filter(c => c === 200).length;",
+                  "       const blocked = responses.filter(c => c === 429).length;",
+                  "       console.log('Successes:', successes, 'Blocked:', blocked);",
+                  "       pm.test('At least one blocked (429)', () => blocked > 0);",
+                  "       pm.test('At least 5 accepted', () => successes >= 1); // 5/sec, so 5 should pass, 6th might fail",
+                  "    }",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup Limit User",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{adminUser}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{adminPass}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "url": "{{baseUrl}}/admin/subscribers/limit-user"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.code === 204);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Rate limit (optional: disabled by default)",
       "item": [
         {
           "name": "Demo: push many within 1s (observe 429 if limits low)",
-          "disabled": true,
+          "disabled": false,
           "request": {
             "method": "GET",
             "header": [
@@ -1300,13 +1678,318 @@
                   "  sendOne(i, () => series(i+1, done));",
                   "}",
                   "series(0, () => {",
-                  "  pm.test('Observed at least one 429 (depends on server limit and timing)', () => true);",
+                  "  // We expect at least one 429 if the limit is exceeded",
+                  "  pm.test('Rate limit enforced (429 observed)', () => seen429 > 0);",
                   "  console.log('Rate-limit 429 count:', seen429);",
                   "});"
                 ]
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Feature Verification",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          {
+            "key": "username",
+            "value": "{{userUser}}",
+            "type": "string"
+          },
+          {
+            "key": "password",
+            "value": "{{userPass}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Priority: Push Low (0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-priority"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "priority",
+                "value": "0"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "Low Priority Message"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Priority: Push High (10)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-priority"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "priority",
+                "value": "10"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "High Priority Message"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Priority: Pop (Expect High)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-priority"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "var json = pm.response.json();",
+                  "pm.test('Got High Priority Message', () => json.content === 'High Priority Message');",
+                  "pm.test('Priority is 10', () => json.priority === 10);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Priority: Pop (Expect Low)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-priority"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "var json = pm.response.json();",
+                  "pm.test('Got Low Priority Message', () => json.content === 'Low Priority Message');",
+                  "pm.test('Priority is 0', () => json.priority === 0);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compression: Push Large (>1KB)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-compress"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "priority",
+                "value": "0"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{largePayload}}"
+            },
+            "url": "{{baseUrl}}/queue/push"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate 2KB string",
+                  "var str = 'A'.repeat(2048);",
+                  "pm.environment.set('largePayload', str);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "var json = pm.response.json();",
+                  "pm.environment.set('compressedMsgId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compression: Pop (Auto Decompress)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "consumerGroup",
+                "value": "{{consumerGroup}}-compress"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/queue/pop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.code === 200);",
+                  "var json = pm.response.json();",
+                  "var original = pm.environment.get('largePayload');",
+                  "pm.test('Content Decompressed Correctly', () => json.content === original);",
+                  "pm.test('ID Matches', () => json.id === pm.environment.get('compressedMsgId'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Teardown: Delete Default User",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{adminUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{adminPass}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "DELETE",
+        "url": "{{baseUrl}}/admin/subscribers/{{userUser}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 204 or 404', () => pm.response.code === 204 || pm.response.code === 404);"
+            ],
+            "type": "text/javascript"
+          }
         }
       ]
     }

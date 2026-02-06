@@ -16,6 +16,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
+import com.al.lightq.util.CompressionHub;
 
 /**
  * Service for viewing messages in the queue for a specific consumer group.
@@ -61,13 +62,15 @@ public class ViewMessageService {
 	 * </p>
 	 *
 	 * @param consumerGroup
-	 *            the consumer group (MongoDB collection) to read from
+	 *                      the consumer group (MongoDB collection) to read from
 	 * @param limit
-	 *            maximum number of messages to return; if less than 1, the
-	 *            service's default limit is applied by caller
+	 *                      maximum number of messages to return; if less than 1,
+	 *                      the
+	 *                      service's default limit is applied by caller
 	 * @param consumed
-	 *            optional flag "yes" or "no" controlling filtering semantics (see
-	 *            above)
+	 *                      optional flag "yes" or "no" controlling filtering
+	 *                      semantics (see
+	 *                      above)
 	 * @return a list (size <= limit) of messages sorted by createdAt ascending
 	 */
 	public List<Message> view(String consumerGroup, int limit, String consumed) {
@@ -83,6 +86,7 @@ public class ViewMessageService {
 			List<Message> fromDb = mongoTemplate.find(query, Message.class, consumerGroup);
 			fromDb.sort(Comparator.comparing(Message::getCreatedAt));
 			logger.debug("Returning {} consumed messages from DB for Consumer Group: {}", fromDb.size(), consumerGroup);
+			decompressMessages(fromDb);
 			return fromDb;
 		}
 
@@ -90,27 +94,20 @@ public class ViewMessageService {
 		List<Message> cached = redisQueueService.viewMessages(consumerGroup, limit);
 
 		// Consistency Check: Verify cached messages are NOT actually consumed in DB
-		// Only perform this check if we care about unconsumed messages (consumedFlag ==
-		// false or null)
-		// and we have items in cache.
 		if (!cached.isEmpty() && (consumedFlag == null || Boolean.FALSE.equals(consumedFlag))) {
 			Set<String> cachedIds = cached.stream().map(Message::getId).collect(Collectors.toSet());
 
-			// Find IDs in this batch that are actually consumed in DB
 			Query checkQuery = new Query();
 			checkQuery.addCriteria(Criteria.where(ID).in(cachedIds));
 			checkQuery.addCriteria(Criteria.where(CONSUMED).is(true));
-			checkQuery.fields().include(ID); // Only need IDs
+			checkQuery.fields().include(ID);
 
 			List<Message> ghosts = mongoTemplate.find(checkQuery, Message.class, consumerGroup);
 
 			if (!ghosts.isEmpty()) {
 				Set<String> ghostIds = ghosts.stream().map(Message::getId).collect(Collectors.toSet());
-				// Remove ghosts from cached list
 				cached = cached.stream().filter(m -> !ghostIds.contains(m.getId())).collect(Collectors.toList());
 
-				// Optional: Self-heal Redis asynchronously?
-				// For now just logging. PopMessageService handles active healing.
 				logger.warn(
 						"View Consistency: Found {} consumed messages lingering in cache for group {}. Filtering them out.",
 						ghosts.size(), consumerGroup);
@@ -130,6 +127,7 @@ public class ViewMessageService {
 			List<Message> limited = result.subList(0, Math.min(limit, result.size()));
 			logger.debug("Returning {} {} messages for Consumer Group: {}", limited.size(),
 					consumedFlag == null ? "(no consumed filter)" : "unconsumed", consumerGroup);
+			decompressMessages(limited);
 			return limited;
 		}
 
@@ -163,6 +161,17 @@ public class ViewMessageService {
 					consumerGroup);
 			logger.info("Returning {} unconsumed messages for Consumer Group: {}", combined.size(), consumerGroup);
 		}
+		decompressMessages(combined);
 		return combined;
+	}
+
+	private void decompressMessages(List<Message> messages) {
+		if (messages != null) {
+			messages.forEach(m -> {
+				if (m.isCompressed()) {
+					m.setContent(CompressionHub.decompress(m.getContent()));
+				}
+			});
+		}
 	}
 }

@@ -19,9 +19,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
 	private final RateLimitProperties rateLimitProperties;
+	private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
-	public WebConfig(RateLimitProperties rateLimitProperties) {
+	public WebConfig(RateLimitProperties rateLimitProperties,
+			org.springframework.data.redis.core.StringRedisTemplate redisTemplate) {
 		this.rateLimitProperties = rateLimitProperties;
+		this.redisTemplate = redisTemplate;
 	}
 
 	/**
@@ -31,7 +34,7 @@ public class WebConfig implements WebMvcConfigurer {
 	 */
 	@Bean
 	public RateLimitingInterceptor rateLimitingInterceptor() {
-		return new RateLimitingInterceptor(rateLimitProperties);
+		return new RateLimitingInterceptor(rateLimitProperties, new RedisRateLimiter(redisTemplate));
 	}
 
 	/**
