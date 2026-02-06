@@ -1,16 +1,22 @@
 package com.al.lightq.config;
 
+import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * Configuration for asynchronous processing.
+ * Configuration for asynchronous processing using Java 21 Virtual Threads.
  * <p>
- * This class sets up a thread pool for executing tasks asynchronously. It also
- * configures the thread pool to propagate the MDC context to child threads.
+ * Virtual threads provide lightweight, scalable concurrency for I/O-bound
+ * operations. They eliminate thread pool sizing concerns and enable massive
+ * concurrency with minimal overhead.
  * </p>
  */
 @Configuration
@@ -18,35 +24,37 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class AsyncConfig {
 
 	/**
-	 * Creates a thread pool task executor.
+	 * Creates a virtual thread executor with MDC context propagation.
+	 * <p>
+	 * Virtual threads are ideal for I/O-bound operations like database and Redis
+	 * calls. Each task runs on its own virtual thread, providing unlimited
+	 * scalability without traditional thread pool constraints.
+	 * </p>
 	 *
-	 * @return the thread pool task executor
+	 * @return the task executor backed by virtual threads
 	 */
 	@Bean(name = "taskExecutor")
-	public ThreadPoolTaskExecutor taskExecutor(LightQProperties props) {
-		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-		executor.setCorePoolSize(props.getCorePoolSize());
-		executor.setMaxPoolSize(props.getMaxPoolSize());
-		executor.setQueueCapacity(props.getQueueCapacity());
-		executor.setThreadNamePrefix(props.getThreadNamePrefix());
-		executor.setTaskDecorator(runnable -> {
-			final java.util.Map<String, String> contextMap = MDC.getCopyOfContextMap();
-			return () -> {
-				if (contextMap != null) {
-					MDC.setContextMap(contextMap);
-				}
-				try {
-					runnable.run();
-				} finally {
-					MDC.clear();
-				}
-			};
-		});
-		executor.setAllowCoreThreadTimeOut(props.isAllowCoreThreadTimeout());
-		executor.setWaitForTasksToCompleteOnShutdown(true);
-		executor.setAwaitTerminationSeconds(props.getAwaitTerminationSeconds());
-		executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
-		executor.initialize();
-		return executor;
+	public TaskExecutor taskExecutor() {
+		// Create a virtual thread executor with custom thread factory for naming
+		Executor virtualThreadExecutor = Executors.newThreadPerTaskExecutor(
+				Thread.ofVirtual().name("lightq-vt-", 0).factory());
+
+		// Wrap with TaskExecutorAdapter and add MDC context propagation
+		return new TaskExecutorAdapter(virtualThreadExecutor) {
+			@Override
+			public void execute(Runnable task) {
+				final Map<String, String> contextMap = MDC.getCopyOfContextMap();
+				super.execute(() -> {
+					if (contextMap != null) {
+						MDC.setContextMap(contextMap);
+					}
+					try {
+						task.run();
+					} finally {
+						MDC.clear();
+					}
+				});
+			}
+		};
 	}
 }

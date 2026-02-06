@@ -148,6 +148,31 @@ public class MessageController {
 	}
 
 	/**
+	 * Batch pop endpoint to retrieve multiple messages in a single request.
+	 * Reserves up to 'count' oldest available messages for the consumer group.
+	 * This is optimized for high-throughput scenarios where clients process
+	 * messages in batches.
+	 *
+	 * Endpoint: GET /queue/batch/pop
+	 * Headers: consumerGroup: target consumer group (required)
+	 * Query Parameters: count: number of messages to pop (default: 10, max: 100)
+	 *
+	 * Response: 200 OK with array of MessageResponse, or empty array if no
+	 * messages.
+	 */
+	@GetMapping(BATCH_POP_URL)
+	public ResponseEntity<java.util.List<MessageResponse>> batchPop(
+			@RequestHeader(CONSUMER_GROUP_HEADER) String consumerGroup,
+			@RequestParam(value = "count", required = false, defaultValue = "10") int count) {
+		int safeCount = Math.max(1, Math.min(count, 100)); // Limit between 1 and 100
+		logger.debug("Received batch pop request for consumer group: {} with count={}", consumerGroup, safeCount);
+		java.util.List<Message> messages = popMessageService.popBatch(consumerGroup, safeCount);
+		java.util.List<MessageResponse> response = messages.stream().map(MessageResponse::new).toList();
+		logger.debug("Batch popped {} messages from consumer group {}", response.size(), consumerGroup);
+		return ResponseEntity.ok(response);
+	}
+
+	/**
 	 * Views messages in the queue for a specific consumer group, with optional
 	 * filtering by consumption status.
 	 *

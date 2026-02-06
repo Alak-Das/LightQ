@@ -150,6 +150,43 @@ public class PopMessageService {
 	}
 
 	/**
+	 * Batch pop: reserves up to 'count' oldest available messages for the given
+	 * consumer group. Optimized for high-throughput scenarios.
+	 * <p>
+	 * Uses a simple loop calling pop() for each message. While this seems
+	 * sequential, with Virtual Threads the underlying I/O operations are
+	 * efficiently multiplexed. For true parallel batch operations, consider
+	 * extending with parallel streams or CompletableFuture.
+	 * </p>
+	 *
+	 * @param consumerGroup
+	 *                      The consumer group from which to pop messages.
+	 * @param count
+	 *                      Maximum number of messages to pop.
+	 * @return List of reserved messages (may be smaller than count if fewer
+	 *         available).
+	 */
+	public java.util.List<Message> popBatch(String consumerGroup, int count) {
+		logger.debug("Attempting batch pop for Consumer Group: {} with count={}", consumerGroup, count);
+		java.util.List<Message> results = new java.util.ArrayList<>(count);
+
+		for (int i = 0; i < count; i++) {
+			Optional<Message> msg = pop(consumerGroup);
+			if (msg.isPresent()) {
+				results.add(msg.get());
+			} else {
+				// No more messages available
+				break;
+			}
+		}
+
+		logger.debug("Batch pop completed for group {}: {} messages reserved", consumerGroup, results.size());
+		meterRegistry.counter("lightq.messages.batch_popped.total", "consumerGroup", consumerGroup)
+				.increment(results.size());
+		return results;
+	}
+
+	/**
 	 * Checks if the message exists in DB and is in a valid state (not consumed). If
 	 * not, removes it from Redis.
 	 */

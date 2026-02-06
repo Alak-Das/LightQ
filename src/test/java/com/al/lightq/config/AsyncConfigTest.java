@@ -1,11 +1,10 @@
 package com.al.lightq.config;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 class AsyncConfigTest {
 
@@ -18,12 +17,10 @@ class AsyncConfigTest {
 
 	@Test
 	void taskExecutorBean() {
-		LightQProperties props = new LightQProperties();
-		ThreadPoolTaskExecutor executor = asyncConfig.taskExecutor(props);
-		assertNotNull(executor);
-		assertEquals(5, executor.getCorePoolSize());
-		assertEquals(10, executor.getMaxPoolSize());
-		assertEquals(25, executor.getQueueCapacity());
-		assertEquals("DBDataUpdater-", executor.getThreadNamePrefix());
+		TaskExecutor executor = asyncConfig.taskExecutor();
+		assertNotNull(executor, "TaskExecutor bean should not be null");
+		// Virtual thread executor doesn't expose pool metrics like
+		// ThreadPoolTaskExecutor
+		// We just verify it's created successfully
 	}
 }

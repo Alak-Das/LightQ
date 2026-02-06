@@ -70,9 +70,11 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 ### Core
 - Push: Enqueue message to a consumer group
 - Scheduled Push: Enqueue message to become visible at a future time
-- Batch Push: Efficient bulk enqueue with pipelined variadic LPUSH and async bulk inserts
+- Batch Push: Efficient bulk enqueue with pipelined ZADD and async bulk inserts
 - Pop (Reserve): Reserve oldest available message with a visibility timeout
+- Batch Pop: Reserve multiple messages in a single request (up to 100)
 - Ack/Nack: Explicit acknowledgement to complete or re-queue
+- Batch Ack: Acknowledge multiple messages in a single request
 - Extend Visibility: Increase reservation window
 - View: Inspect messages (admin)
 - DLQ: Auto-move over-retried messages; view and replay
@@ -89,7 +91,7 @@ LightQ is a production-ready Spring Boot application implementing a simple yet r
 - **Self-Healing**: `Pop` operations automatically detect and remove invalid/consumed messages from Redis ("junk cleanup").
 - **View Consistency**: Admin views cross-reference cache with DB to filter out "ghost" messages.
 - **Binary Serialization**: Compact Jackson Smile + Afterburner.
-- **Async Execution**: Thread pool for heavy I/O operations where appropriate.
+- **Virtual Threads (Java 21)**: Lightweight, scalable concurrency for I/O-bound operations.
 
 ### Operations & Security
 - HTTP Basic Auth with USER/ADMIN roles
@@ -241,10 +243,11 @@ src/main/java/com/al/lightq/
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
 | Framework | Spring Boot | 4.0.1 | Application framework |
-| Language | Java | 21 | LTS |
+| Language | Java | 21 | LTS with Virtual Threads |
+| Concurrency | Virtual Threads | Java 21 | Lightweight, scalable async I/O |
 | Web | spring-boot-starter-web | 4.0.1 | REST |
 | Monitoring | Spring Boot Actuator | 4.0.1 | Health, metrics |
-| Cache | Redis | 7.x | In-memory lists |
+| Cache | Redis | 7.x | In-memory sorted sets (ZSet) |
 | Cache Client | Spring Data Redis + Caffeine | Managed by Spring Boot 4.0.x | RedisTemplate + in-memory caches |
 | Database | MongoDB | 7.0 | Durable storage |
 | DB Client | Spring Data MongoDB | Managed by Spring Boot 4.0.x | MongoTemplate |
@@ -347,22 +350,24 @@ Note: .env.example demonstrates values and may differ (e.g., 10 for POP). If uns
 | LIGHTQ_DLQ_SUFFIX | -dlq | DLQ collection suffix |
 | LIGHTQ_DLQ_TTL_MINUTES | (unset) | TTL for DLQ collection; unset disables |
 
-### 8.7 Thread Pool
-- CORE_POOL_SIZE=20
-- MAX_POOL_SIZE=50
-- QUEUE_CAPACITY=500
-- THREAD_NAME_PREFIX=DBDataUpdater-
-- ALLOW_CORE_THREAD_TIMEOUT=true
-- AWAIT_TERMINATION_SECONDS=60
+### 8.7 Virtual Threads (Java 21)
+LightQ uses Java 21 Virtual Threads for all async operations instead of traditional thread pools:
+- **Massive Scalability**: Each async task runs on its own virtual thread
+- **No Pool Sizing**: Eliminates thread pool configuration complexity
+- **Efficient I/O**: Virtual threads are ideal for I/O-bound operations (Redis, MongoDB)
+- **MDC Propagation**: Correlation IDs are automatically propagated to virtual threads
+
+> [!NOTE]
+> Virtual Threads replace the previous `ThreadPoolTaskExecutor`. The legacy pool settings (`CORE_POOL_SIZE`, `MAX_POOL_SIZE`, etc.) are no longer used.
 
 ### 8.8 Redis Client Tuning
 | Variable | Default | Description |
 |----------|---------|-------------|
-| LIGHTQ_REDIS_COMMAND_TIMEOUT_SECONDS | 5 | Lettuce command timeout (seconds) |
+| LIGHTQ_REDIS_COMMAND_TIMEOUT_SECONDS | 3 | Lettuce command timeout (seconds) |
 | LIGHTQ_REDIS_SHUTDOWN_TIMEOUT_SECONDS | 2 | Lettuce shutdown timeout (seconds) |
-| LIGHTQ_REDIS_POOL_MAX_TOTAL | 64 | Max total pooled connections |
-| LIGHTQ_REDIS_POOL_MAX_IDLE | 32 | Max idle pooled connections |
-| LIGHTQ_REDIS_POOL_MIN_IDLE | 8 | Min idle pooled connections |
+| LIGHTQ_REDIS_POOL_MAX_TOTAL | 128 | Max total pooled connections |
+| LIGHTQ_REDIS_POOL_MAX_IDLE | 64 | Max idle pooled connections |
+| LIGHTQ_REDIS_POOL_MIN_IDLE | 16 | Min idle pooled connections |
 
 ### 8.9 Cache/Index Bounds
 | Variable | Default | Description |
@@ -503,6 +508,43 @@ Notes
 - Increments deliveryCount and sets reservedUntil to now + visibilityTimeoutSeconds
 - Client must call ack (success) or nack (failure) or extend-visibility if needed
 - If not acked in time, message becomes visible again (re-delivered)
+
+---
+
+### 2a) Batch Pop (Bulk Reservation)
+Reserve multiple messages in a single request. Optimized for high-throughput consumers processing messages in batches.
+
+Request
+```http
+GET /queue/batch/pop?count=10
+consumerGroup: my-group
+```
+
+cURL
+```bash
+curl -u user:password "http://localhost:8080/queue/batch/pop?count=20" \
+  -H "consumerGroup: my-group"
+```
+
+Query Parameters
+- count (optional): Number of messages to pop (default: 10, max: 100)
+
+Response 200
+```json
+[
+  {"id":"<uuid1>","content":"...","createdAt":"..."},
+  {"id":"<uuid2>","content":"...","createdAt":"..."},
+  {"id":"<uuid3>","content":"...","createdAt":"..."}
+]
+```
+
+Response 200 (empty array)
+- No reservable messages currently available
+
+Notes
+- Returns up to `count` messages (may be fewer if queue has less)
+- Each message is reserved individually with deliveryCount incremented
+- Use with batch ack for efficient high-throughput processing
 
 ---
 
